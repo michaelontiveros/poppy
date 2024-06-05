@@ -1,4 +1,4 @@
-import  math
+import math
 import conway_polynomials
 import jax.numpy  as jnp
 import jax.lax    as jlx
@@ -211,7 +211,7 @@ class array:
             return A, A[ j ]
         
         @jit
-        def inv_scan( ):
+        def inv_jit( ):
             
             N     = self.rep.shape[ 0 ]
             IN    = jnp.eye( N, dtype = jnp.int64 )
@@ -220,7 +220,7 @@ class array:
             
             return jlx.scan( row_reduce_jit, REPI, RANGE )[ 0 ][ : , N : ]
         
-        INV = inv_scan( )
+        INV = inv_jit( )
         return array( INV, dtype = self.field, lifted = True )
     
     def proj( self ):
