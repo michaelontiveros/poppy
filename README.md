@@ -24,4 +24,21 @@ like large matrix multiply very quickly `mod p`.
 
 # Performance
 
+`F = F1916327294461`.
+
+`a`, `b` are random `222 x 222` matrices over `F`.
+
+`c` is a random number in `F`.
+
+| operation  | time ( T4 GPU ) |
+| ------------- | ------------- |
+| `poppy.array( a, F )`  | 188 us |
+| `a.proj( )`  | 130 us  |
+| `a + b`  | 170 us  |
+| `a * c`  | 1.39 ms  |
+| `a @ b`  | 2.24 ms  |
+| `a.inv( )`  | 482 ms  |
+
+`poppy` uses Gaussian elmimination to invert matrices `mod p`.
+
 
