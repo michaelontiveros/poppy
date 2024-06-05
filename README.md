@@ -19,7 +19,7 @@ It has two classes: `field` and `array`. It is written in `jax`.
 # Construction
 The injective homomorphism `h : F_q --> M_n( F_p )` mapping `f mod y` to `f( X )` 
 extends linearly to a homomorphism `H : M_d( F_q ) --> M_nd( F_p )`, reducing linear algebra over finite fields
-to linear algebra `mod p`. GPU optimized machine learning libraries like `jax` and `pytorch` do linear algebra operations
+to linear algebra `mod p`. GPU optimized machine learning libraries like `jax` do linear algebra operations
 like large matrix multiply very quickly `mod p`.
 
 # Performance
