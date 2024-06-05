@@ -1,14 +1,14 @@
+import  math
 import conway_polynomials
 import jax.numpy  as jnp
 import jax.lax    as jlx
-from   jax    import jit, random, vmap, pmap, config
+from   jax        import jit, random, vmap, config
+from   functools  import partial
+
 config.update("jax_enable_x64", True)
-import time, math
-from functools import partial
 
 CONWAY = conway_polynomials.database()
-KEY1   = random.PRNGKey( 1 )
-KEY2   = random.PRNGKey( 3 )
+seed   = 1
 
 @partial( jit, static_argnums = 2 )
 def mulmodp( a, b, p ):
@@ -98,8 +98,6 @@ class field:
     def is_( self, f ):
         return ( self.p is f.p ) and ( self.n is f.n )
 
-
-
 @partial( jit, static_argnums = 1 )
 def i2v( i, F ):
     return jnp.floor_divide( i * F.ONE, F.BASIS ) % F.p
@@ -132,6 +130,19 @@ i2m_vmap = vmap( i2m, in_axes = ( 0, None ) )
 m2i_vmap = vmap( m2i, in_axes = ( 0, None ) )
 
 @partial( jit, static_argnums = 1 )
+def ravel( m, F ):
+    s = m.shape
+    return m.reshape( s[ : -1 ] + ( s[ -1 ] // F.n, F.n ) ) \
+                   .swapaxes( -2, -3 ) \
+                   .reshape( s[ : -2 ] + ( s[ -1 ] // F.n, s[ -2 ] // F.n, F.n, F.n ) ) \
+                   .swapaxes( -3, -4 ) \
+                   .reshape( ( math.prod( s ) // F.n ** 2 , F.n, F.n ) )
+
+@partial( jit, static_argnums = ( 1, 2 ) )
+def unravel( i, F, s ):
+    return i.reshape( s[ : -2 ] + ( s[ -2 ] // F.n, s[ -1 ] // F.n ) )  
+
+@partial( jit, static_argnums = 1 )
 def lift( i, F ):
     s = i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 ) if len( i.shape ) == 1 else ( 1, 1 )
     m = i2m_vmap( i.ravel( ), F )
@@ -142,17 +153,12 @@ def lift( i, F ):
 @partial( jit, static_argnums = 1 )
 def proj( m, F ):
     s = m.shape
-    i = m2i_vmap( m.reshape( s[ : -1 ] + ( s[ -1 ] // F.n, F.n ) ) \
-                   .swapaxes( -2, -3 ) \
-                   .reshape( s[ : -2 ] + ( s[ -1 ] // F.n, s[ -2 ] // F.n, F.n, F.n ) ) \
-                   .swapaxes( -3, -4 ) \
-                   .reshape( ( math.prod( s ) // F.n**2 , F.n, F.n ) ), F )
-    return i.reshape( s[ : -2 ] + ( s[ -2 ] // F.n, s[ -1 ] // F.n ) )   
+    i = m2i_vmap( ravel( m, F ), F )
+    return unravel( i, F, s )
 
-def test_liftproj( key, shape, field ):
+def testliftproj( key, shape, field ):
     ai = random.randint( key, shape, 0, field.q, dtype = jnp.int64 )
     return jnp.nonzero( ai - proj( lift( ai, field ), field ) )
-
 
 class array:
     def __init__( self, i, dtype = field( 2, 1 ), lifted = False ):
@@ -162,11 +168,12 @@ class array:
         
     def __mul__( self, a ):
         assert a.field is self.field
-        if self.shape == ( ) or self.shape == ( 1, ):
-            return array( matmulmodp_vmap_im( self.rep, a.rep, self.field.p ), dtype = self.field, lifted = True )
-        if a.shape    == ( ) or a.shape    == ( 1, ):               
-            return array( matmulmodp_vmap_mi( a.rep, self.rep, self.field.p ), dtype = self.field, lifted = True )
-        print( 'ERROR in A * B: neither A nor B is scalar.' )
+        
+        if self.shape == ( ) or self.shape == ( 1, ) or self.shape == ( 1, 1 ):
+            return array( matmulmodp_vmap_im( self.rep, ravel( a.rep, self.field ), self.field.p ).reshape(    a.rep.shape ), dtype = self.field, lifted = True )
+        if a.shape    == ( ) or    a.shape == ( 1, ) or    a.shape == ( 1, 1 ):               
+            return array( matmulmodp_vmap_mi( ravel( self.rep, self.field ), a.rep, self.field.p ).reshape( self.rep.shape ), dtype = self.field, lifted = True )
+        print( 'ERROR in a * b: neither a nor b is scalar.' )
         
     def __add__( self, a ):
         assert a.field is self.field
@@ -186,7 +193,6 @@ class array:
         return array( matmulmodp( self.rep, a.rep, self.field.p ), dtype = self.field, lifted = True )
     
     def inv( self ):
-        
         assert self.rep.shape[ 0 ] == self.rep.shape[ 1 ]
         
         @partial( jit, static_argnums = 1 )
@@ -217,12 +223,5 @@ class array:
         INV = inv_scan( )
         return array( INV, dtype = self.field, lifted = True )
     
-    def jax( self ):
+    def proj( self ):
         return proj( self.rep, self.field )
-        
-    def galois( self ):
-        GF = galois.Field( self.field.q )
-        return GF( np.asarray( proj( self.rep, self.field ) ).copy( ) )
-        
-    def torch( self ):
-        return torch.from_numpy( np.asarray( self.rep ).copy( ) ).to( torch.device( 'cuda' ), dtype = float )
