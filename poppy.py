@@ -36,7 +36,6 @@ matmulmodp_vmap_mm = vmap( matmulmodp, in_axes = ( 0,    0, None ) )
 
 class field:
     def __init__( self, p, n ):
-        assert n * math.log( p ) < 50 * math.log( 2 )
         self.p = p
         self.n = n
         self.q = p ** n 
@@ -104,7 +103,7 @@ def i2v( i, F ):
 
 @partial( jit, static_argnums = 1 )
 def v2i( v, F ):
-    return jnp.sum( v * F.BASIS, dtype = jnp.int64 )
+    return jnp.sum( v * F.BASIS % F.q, dtype = jnp.int64 ) % F.q
 
 @partial( jit, static_argnums = 1 )
 def v2m( v, F ):
