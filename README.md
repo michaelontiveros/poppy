@@ -39,6 +39,6 @@ like large matrix multiply very quickly `mod p`.
 | `a @ b`  | 2.24 ms  |
 | `a.inv( )`  | 482 ms  |
 
-`poppy` uses Gaussian elmimination to invert matrices `mod p`.
+`poppy` uses standard Gaussian elmimination to invert matrices `mod p`.
 
 
