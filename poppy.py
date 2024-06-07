@@ -231,3 +231,7 @@ class array:
     
     def proj( self ):
         return proj( self.rep, self.field )
+
+def random( shape, F, seed = SEED ):
+    a = jax.random.randint( jax.random.PRNGKey( seed ), shape, 0, F.q, dtype = jnp.int64 )
+    return array( a, F )
