@@ -83,12 +83,12 @@ class field:
             return mulmodp( a, b, self.p )
         
         @functools.partial( jax.jit, static_argnums = 1 )
-        def INV( ABCD, i ):
+        def INV( ABC, i ):
             
-            ABCD = ABCD.at[ i - 1, 2 ].set( prod( prod( ABCD[ i - 2, 0 ], ABCD[ i - 2, 3 ] ), ABCD[ i - 1, 1 ] ) )
-            ABCD = ABCD.at[ i - 1, 3 ].set(       prod( ABCD[ i - 2, 0 ], ABCD[ i - 2, 3 ] ) )
+            C = prod( ABC[ i - 2, 0 ], ABC[ i - 2, 2 ] )
+            ABC =  ABC.at[ i - 1, 2 ].set( C )
             
-            return ABCD, ABCD[ i - 1, 2 ]
+            return ABC, prod( ABC[ i - 1, 1 ], C )
         
         @jax.jit
         def inv_jit( ):
@@ -96,11 +96,10 @@ class field:
             A  = jnp.arange( 1, self.p, dtype = jnp.int64 )
             AA = jnp.concatenate( [ jnp.ones( 1, dtype = jnp.int64 ), jnp.flip( A[ 1 : ] ) ] )
             B  = jnp.flip( jax.lax.associative_scan( prod, AA ) )
-            C  = jnp.ones( self.p - 1, dtype = jnp.int64 )
-            D  = jnp.ones( self.p - 1, dtype = jnp.int64 ).at[ 0 ].set( self.p - 1 )
-            ABCD = jnp.vstack( [ A, B, C, D ] ).transpose( )
+            C  = jnp.ones( self.p - 1, dtype = jnp.int64 ).at[ 0 ].set( self.p - 1 )
+            ABC = jnp.vstack( [ A, B, C ] ).transpose( )
             
-            return jnp.concatenate( [ jnp.zeros( 1, dtype = jnp.int64 ), jax.lax.scan( INV, ABCD, A )[ 1 ] ] )
+            return jnp.concatenate( [ jnp.zeros( 1, dtype = jnp.int64 ), jax.lax.scan( INV, ABC, A )[ 1 ] ] )
         
         return inv_jit( )
     
