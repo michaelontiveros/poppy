@@ -112,7 +112,7 @@ def i2v( i, F ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def v2i( v, F ):
-    return jnp.sum( v * F.BASIS % F.p, dtype = jnp.int64 )
+    return jnp.sum( v * F.BASIS, dtype = jnp.int64 )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def v2m( v, F ):
