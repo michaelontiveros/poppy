@@ -102,9 +102,6 @@ class field:
             return jnp.concatenate( [ jnp.zeros( 1, dtype = jnp.int64 ), jax.lax.scan( INV, ABC, A )[ 1 ] ] )
         
         return inv_jit( )
-    
-    def is_( self, f ):
-        return ( self.p is f.p ) and ( self.n is f.n )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def i2v( i, F ):
@@ -137,14 +134,21 @@ m2v_vmap = jax.vmap( m2v, in_axes = ( 0, None ) )
 i2m_vmap = jax.vmap( i2m, in_axes = ( 0, None ) )
 m2i_vmap = jax.vmap( m2i, in_axes = ( 0, None ) )
 
+@functools.partial( jax.jit, static_argnums = 2 )
+def diag( m, i, F ):
+    n  = F.n
+    return jax.lax.dynamic_slice( m, (  n * i, n * i ), ( n, n ) )
+diag_vmap = jax.vmap( diag, in_axes = ( None, 0, None ) )
+
 @functools.partial( jax.jit, static_argnums = 1 )
 def ravel( m, F ):
     s = m.shape
-    return m.reshape( s[ : -1 ] + ( s[ -1 ] // F.n, F.n ) ) \
-                   .swapaxes( -2, -3 ) \
-                   .reshape( s[ : -2 ] + ( s[ -1 ] // F.n, s[ -2 ] // F.n, F.n, F.n ) ) \
-                   .swapaxes( -3, -4 ) \
-                   .reshape( ( -1, F.n, F.n ) )
+    n = F.n
+    return m.reshape( s[ : -1 ] + ( s[ -1 ] // n, n ) ) \
+            .swapaxes( -2, -3 ) \
+            .reshape( s[ : -2 ] + ( s[ -1 ] // n, s[ -2 ] // n, n, n ) ) \
+            .swapaxes( -3, -4 ) \
+            .reshape( ( -1, n, n ) )
 
 @functools.partial( jax.jit, static_argnums = ( 1, 2 ) )
 def unravel( i, F, s ):
@@ -154,9 +158,10 @@ def unravel( i, F, s ):
 def lift( i, F ):
     s = i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 ) if len( i.shape ) == 1 else ( 1, 1 )
     m = i2m_vmap( i.ravel( ), F )
-    return m.reshape( s + ( F.n, F.n ) ) \
+    n = F.n
+    return m.reshape( s + ( n, n ) ) \
             .swapaxes( -2, -3 ) \
-            .reshape( s[ : -2 ] + ( s[ -2 ] * F.n, s[ -1 ] * F.n ) )
+            .reshape( s[ : -2 ] + ( s[ -2 ] * n, s[ -1 ] * n ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def proj( m, F ):
@@ -204,8 +209,8 @@ class array:
             if a.at[ i, j ] == 0:
                 return a, a[ j ]
         
-            rj, ri = a[ j ], a[ i ] * self.field.INV[ a[ i, j ] ] % self.field.p
-            a      = a.at[ i ].set( rj ).at[ j ].set( ri )
+            Rj, Ri = a[ j ], a[ i ] * self.field.INV[ a[ i, j ] ] % self.field.p
+            a      = a.at[ i ].set( Rj ).at[ j ].set( Ri )
             A      = ( a - jnp.outer(a[ : , j ].at[ j ] .set( 0 ), a[ j ] ) ) % self.field.p
             
             return A, A[ j ]
@@ -226,6 +231,20 @@ class array:
     def proj( self ):
         return proj( self.lift, self.field )
 
+    def trace( self ):
+
+        @jax.jit
+        def add( a, b ):
+            return addmodp( a, b, self.field.p )
+        
+        R = jnp.arange( self.shape[ 0 ] )
+        D = diag_vmap( self.lift, R, self.field )
+        T = jax.lax.associative_scan( add, D )[ -1 ]
+        
+        return array( T, self.field, lifted = True )
+
 def random( shape, F, seed = SEED ):
+    
     a = jax.random.randint( jax.random.PRNGKey( seed ), shape, 0, F.q, dtype = jnp.int64 )
+    
     return array( a, F )
