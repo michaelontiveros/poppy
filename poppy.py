@@ -11,6 +11,7 @@ SEED   = 1
 @jax.jit
 def id( a, i ):
     return a
+stack = jax.vmap( id, ( None, 0 ) )
 
 @functools.partial( jax.jit, static_argnums = 2 )
 def mulmodp( a, b, p ):
@@ -32,7 +33,9 @@ def submodp( a, b, p ):
 def negmodp( a, p ):
     return ( -a ) % p
 
-repeat = jax.vmap( id, ( None, 0 ) )
+@functools.partial( jax.jit, static_argnums = 2 )
+def matmulmodp( a, b, p ):
+    return ( a @ b ) % p
 matmulmodp_vmap_im = jax.vmap( matmulmodp, in_axes = ( None, 0, None ) )
 matmulmodp_vmap_mi = jax.vmap( matmulmodp, in_axes = ( 0, None, None ) )
 matmulmodp_vmap_mm = jax.vmap( matmulmodp, in_axes = ( 0,    0, None ) )
@@ -66,8 +69,8 @@ class field:
             # M is the companion matrix of the Conway polynomial.
             M  = self.ZERO.at[ 1:, :-1 ].set( self.I[ 1:, 1: ] ).at[ :, -1 ].set( V )
             
-            # X is an array of powers of the companion matrix.
-            X = jax.lax.associative_scan( matmul, repeat( M, self.RANGE ).at[ 0 ].set( self.I ) )
+            # X is the array of powers of the companion matrix.
+            X = jax.lax.associative_scan( matmul, stack( M, self.RANGE ).at[ 0 ].set( self.I ) )
             
             return X
 
