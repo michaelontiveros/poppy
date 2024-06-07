@@ -175,29 +175,21 @@ class array:
         self.lift  = i if lifted else lift( i, self.field )
         
     def __mul__( self, a ):
-        assert a.field is self.field
-        
         if self.shape == ( ) or self.shape == ( 1, ) or self.shape == ( 1, 1 ):
             return array( matmulmodp_vmap_im( self.lift, ravel( a.lift, self.field ), self.field.p ).reshape(    a.lift.shape ), dtype = self.field, lifted = True )
         if a.shape    == ( ) or    a.shape == ( 1, ) or    a.shape == ( 1, 1 ):               
             return array( matmulmodp_vmap_mi( ravel( self.lift, self.field ), a.lift, self.field.p ).reshape( self.lift.shape ), dtype = self.field, lifted = True )
-        print( 'ERROR in a * b: neither a nor b is scalar.' )
         
     def __add__( self, a ):
-        assert a.field is self.field
-        assert a.shape == self.shape
         return array( addmodp( self.lift, a.lift, self.field.p ), dtype = self.field, lifted = True )
     
     def __sub__( self, a ):
-        assert a.field is self.field
-        assert a.shape == self.shape
         return array( submodp( self.lift, a.lift, self.field.p ), dtype = self.field, lifted = True )
     
     def __neg__( self ):
         return array( negmodp( self.lift, self.field.p ), dtype = self.field, lifted = True )
     
     def __matmul__( self, a ):
-        assert a.field is self.field
         return array( matmulmodp( self.lift, a.lift, self.field.p ), dtype = self.field, lifted = True )
     
     def inv( self ):
