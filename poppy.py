@@ -224,7 +224,7 @@ class array:
         return INV
     
     def proj( self ):
-        return proj( self.rep, self.field )
+        return proj( self.lift, self.field )
 
 def random( shape, F, seed = SEED ):
     a = jax.random.randint( jax.random.PRNGKey( seed ), shape, 0, F.q, dtype = jnp.int64 )
