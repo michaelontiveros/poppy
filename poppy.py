@@ -11,6 +11,7 @@ SEED   = 1
 @jax.jit
 def id( a, i ):
     return a
+
 stack = jax.vmap( id, ( None, 0 ) )
 
 @functools.partial( jax.jit, static_argnums = 2 )
@@ -36,12 +37,14 @@ def negmodp( a, p ):
 @functools.partial( jax.jit, static_argnums = 2 )
 def matmulmodp( a, b, p ):
     return ( a @ b ) % p
+
 matmulmodp_vmap_im = jax.vmap( matmulmodp, in_axes = ( None, 0, None ) )
 matmulmodp_vmap_mi = jax.vmap( matmulmodp, in_axes = ( 0, None, None ) )
 matmulmodp_vmap_mm = jax.vmap( matmulmodp, in_axes = ( 0,    0, None ) )
 
 class field:
     def __init__( self, p, n ):
+        
         self.p = p
         self.n = n
         self.q = p ** n 
@@ -136,14 +139,19 @@ m2i_vmap = jax.vmap( m2i, in_axes = ( 0, None ) )
 
 @functools.partial( jax.jit, static_argnums = 2 )
 def diag( m, i, F ):
+    
     n  = F.n
+    
     return jax.lax.dynamic_slice( m, (  n * i, n * i ), ( n, n ) )
+
 diag_vmap = jax.vmap( diag, in_axes = ( None, 0, None ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def ravel( m, F ):
+    
     s = m.shape
     n = F.n
+    
     return m.reshape( s[ : -1 ] + ( s[ -1 ] // n, n ) ) \
             .swapaxes( -2, -3 ) \
             .reshape( s[ : -2 ] + ( s[ -1 ] // n, s[ -2 ] // n, n, n ) ) \
@@ -156,32 +164,41 @@ def unravel( i, F, s ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def lift( i, F ):
+    
     s = i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 ) if len( i.shape ) == 1 else ( 1, 1 )
     m = i2m_vmap( i.ravel( ), F )
     n = F.n
+    
     return m.reshape( s + ( n, n ) ) \
             .swapaxes( -2, -3 ) \
             .reshape( s[ : -2 ] + ( s[ -2 ] * n, s[ -1 ] * n ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def proj( m, F ):
+    
     s = m.shape
     i = m2i_vmap( ravel( m, F ), F )
+    
     return unravel( i, F, s )
 
 def testliftproj( key, shape, field ):
+
     ai = jax.random.randint( key, shape, 0, field.q, dtype = jnp.int64 )
+    
     return jnp.nonzero( ai - proj( lift( ai, field ), field ) )
 
 class array:
     def __init__( self, i, dtype = field( 2, 1 ), lifted = False ):
+    
         self.field = dtype 
         self.shape = i.shape[ : -2 ] + ( i.shape[ -2 ] // self.field.n, i.shape[ -1 ] // self.field.n ) if lifted else i.shape
         self.lift  = i if lifted else lift( i, self.field )
         
     def __mul__( self, a ):
+        
         if self.shape == ( ) or self.shape == ( 1, ) or self.shape == ( 1, 1 ):
             return array( matmulmodp_vmap_im( self.lift, ravel( a.lift, self.field ), self.field.p ).reshape(    a.lift.shape ), dtype = self.field, lifted = True )
+        
         if a.shape    == ( ) or    a.shape == ( 1, ) or    a.shape == ( 1, 1 ):               
             return array( matmulmodp_vmap_mi( ravel( self.lift, self.field ), a.lift, self.field.p ).reshape( self.lift.shape ), dtype = self.field, lifted = True )
         
@@ -198,7 +215,9 @@ class array:
         return array( matmulmodp( self.lift, a.lift, self.field.p ), dtype = self.field, lifted = True )
     
     def inv( self ):
-        assert self.lift.shape[ 0 ] == self.lift.shape[ 1 ]
+        
+        assert len( self.shape ) > 1
+        assert self.shape[ -1 ] == self.shape[ -2 ]
         
         @functools.partial( jax.jit, static_argnums = 1 )
         def row_reduce_jit( a, j ):    
@@ -225,13 +244,17 @@ class array:
             
             return jax.lax.scan( row_reduce_jit, MI, RANGE )[ 0 ][ : , N : ]
         
-        INV = array( inv_jit( ), dtype = self.field, lifted = True )
-        return INV
+        INV = inv_jit( )
+        
+        return array( INV, dtype = self.field, lifted = True )
     
     def proj( self ):
         return proj( self.lift, self.field )
 
     def trace( self ):
+
+        assert len( self.shape ) > 1
+        assert self.shape[ -1 ] == self.shape[ -2 ]
 
         @jax.jit
         def add( a, b ):
@@ -241,7 +264,7 @@ class array:
         D = diag_vmap( self.lift, R, self.field )
         T = jax.lax.associative_scan( add, D )[ -1 ]
         
-        return array( T, self.field, lifted = True )
+        return array( T, dtype = self.field, lifted = True )
 
 def random( shape, F, seed = SEED ):
     
