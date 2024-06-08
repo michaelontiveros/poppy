@@ -11,7 +11,7 @@ It has two classes: `field` and `array`. It is written in `jax`.
 
 `M_d( F )` is the ring of `d x d` matrices over `F`.
 
-`y = y_q( x )` is the Conway polynomial.
+`y = y_q` is the Conway polynomial.
 
 `X = X_y` is the `n x n` companion matrix.
 
