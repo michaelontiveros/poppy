@@ -70,7 +70,7 @@ class field:
             V  = ( -jnp.array( self.CONWAY[ :-1 ], dtype = jnp.int64 ) ) % self.p
             
             # M is the companion matrix of the Conway polynomial.
-            M  = self.ZERO.at[ 1:, :-1 ].set( self.I[ 1:, 1: ] ).at[ :, -1 ].set( V )
+            M  = self.ZERO.at[ : -1, 1 : ].set( self.I[ 1 : , 1 : ] ).at[ -1 ].set( V )
             
             # X is the array of powers of the companion matrix.
             X = jax.lax.associative_scan( matmul, stack( M, self.RANGE ).at[ 0 ].set( self.I ) )
@@ -120,7 +120,7 @@ def v2m( v, F ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def m2v( m, F ):
-    return m[ : F.n, 0 ]
+    return m[ 0 ]
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def i2m( i, F ):
@@ -128,7 +128,7 @@ def i2m( i, F ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def m2i( m, F ):
-    return v2i( m[ : F.n, 0 ], F )
+    return v2i( m[ 0 ], F )
 
 i2v_vmap = jax.vmap( i2v, in_axes = ( 0, None ) )
 v2i_vmap = jax.vmap( v2i, in_axes = ( 0, None ) )
@@ -147,7 +147,7 @@ def diag( m, i, F ):
 diag_vmap = jax.vmap( diag, in_axes = ( None, 0, None ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def ravel( m, F ):
+def block( m, F ):
     
     s = m.shape
     n = F.n
@@ -155,8 +155,14 @@ def ravel( m, F ):
     return m.reshape( s[ : -1 ] + ( s[ -1 ] // n, n ) ) \
             .swapaxes( -2, -3 ) \
             .reshape( s[ : -2 ] + ( s[ -1 ] // n, s[ -2 ] // n, n, n ) ) \
-            .swapaxes( -3, -4 ) \
-            .reshape( ( -1, n, n ) )
+            .swapaxes( -3, -4 ) 
+
+@functools.partial( jax.jit, static_argnums = 1 )
+def ravel( m, F ):
+    
+    n = F.n
+    
+    return block( m, F ).reshape( ( -1, n, n ) )
 
 @functools.partial( jax.jit, static_argnums = ( 1, 2 ) )
 def unravel( i, F, s ):
@@ -253,17 +259,15 @@ class array:
 
     def trace( self ):
 
-        assert len( self.shape ) > 1
-        assert self.shape[ -1 ] == self.shape[ -2 ]
+        d = self.shape[ -1 ]
 
-        @jax.jit
-        def add( a, b ):
-            return addmodp( a, b, self.field.p )
-        
-        R = jnp.arange( self.shape[ 0 ] )
-        D = diag_vmap( self.lift, R, self.field )
-        T = jax.lax.associative_scan( add, D )[ -1 ]
-        
+        if d == 1:
+            return self
+
+        n = self.field.n
+
+        T = v2m( jnp.sum( jnp.pad( self.lift.ravel( ), ( 0, d * n ) ).reshape( ( -1, d * n * n + n ) )[ : , : n ], axis = 0 ) % self.field.p, self.field )
+
         return array( T, dtype = self.field, lifted = True )
 
 def random( shape, F, seed = SEED ):
