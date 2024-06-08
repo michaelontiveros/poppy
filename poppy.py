@@ -106,6 +106,10 @@ class field:
         
         return inv_jit( )
 
+    def __repr__( self ):
+        return f'field order { self.q }.'
+
+
 @functools.partial( jax.jit, static_argnums = 1 )
 def i2v( i, F ):
     return jnp.floor_divide( i * F.ONE, F.BASIS ) % F.p
@@ -253,6 +257,9 @@ class array:
         T = jnp.trace( block( self.lift, self.field ) ) % self.field.p
         
         return array( T, dtype = self.field, lifted = True )
+
+    def __repr__( self ):
+        return f'array shape { self.shape }.\n' + repr( self.field ) 
 
 def random( shape, F, seed = SEED ):
     
