@@ -19,10 +19,6 @@ def mulmodp( a, b, p ):
     return ( a * b ) % p
 
 @functools.partial( jax.jit, static_argnums = 2 )
-def matmulmodp( a, b, p ):
-    return ( a @ b ) % p
-
-@functools.partial( jax.jit, static_argnums = 2 )
 def addmodp( a, b, p ):
     return ( a + b ) % p
 
@@ -147,10 +143,7 @@ def block( m, F ):
     s = m.shape
     n = F.n
     
-    return m.reshape( s[ : -1 ] + ( s[ -1 ] // n, n ) ) \
-            .swapaxes( -2, -3 ) \
-            .reshape( s[ : -2 ] + ( s[ -1 ] // n, s[ -2 ] // n, n, n ) ) \
-            .swapaxes( -3, -4 ) 
+    return m.reshape( s[ : -2 ] + ( s[ -2 ] // n, n, s[ -1 ] // n, n ) ).swapaxes( -2, -3 )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def ravel( m, F ):
