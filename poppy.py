@@ -137,15 +137,6 @@ m2v_vmap = jax.vmap( m2v, in_axes = ( 0, None ) )
 i2m_vmap = jax.vmap( i2m, in_axes = ( 0, None ) )
 m2i_vmap = jax.vmap( m2i, in_axes = ( 0, None ) )
 
-@functools.partial( jax.jit, static_argnums = 2 )
-def diag( m, i, F ):
-    
-    n  = F.n
-    
-    return jax.lax.dynamic_slice( m, (  n * i, n * i ), ( n, n ) )
-
-diag_vmap = jax.vmap( diag, in_axes = ( None, 0, None ) )
-
 @functools.partial( jax.jit, static_argnums = 1 )
 def block( m, F ):
     
@@ -259,15 +250,8 @@ class array:
 
     def trace( self ):
 
-        d = self.shape[ -1 ]
-
-        if d == 1:
-            return self
-
-        n = self.field.n
-
-        T = v2m( jnp.sum( jnp.pad( self.lift.ravel( ), ( 0, d * n ) ).reshape( ( -1, d * n * n + n ) )[ : , : n ], axis = 0 ) % self.field.p, self.field )
-
+        T = jnp.trace( block( self.lift, self.field ) ) % self.field.p
+        
         return array( T, dtype = self.field, lifted = True )
 
 def random( shape, F, seed = SEED ):
