@@ -120,7 +120,7 @@ def v2i( v, F ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def v2m( v, F ):
-    return jnp.einsum( 'i,ijk -> jk', v, F.X ) % F.p
+    return jnp.dot( v, F.X ) % F.p
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def m2v( m, F ):
