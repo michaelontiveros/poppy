@@ -35,6 +35,7 @@ like large matrix multiply very quickly `mod p`.
 | `poppy.array( a, F )`  | 188 us |
 | `a.proj( )`  | 130 us  |
 | `a + b`  | 170 us  |
+| `a.trace( )` | 1.37 ms |
 | `a * c`  | 1.39 ms  |
 | `a @ b`  | 2.24 ms  |
 | `a.inv( )`  | 482 ms  |
