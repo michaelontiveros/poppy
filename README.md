@@ -32,13 +32,13 @@ like large matrix multiply very quickly `mod p`.
 
 | operation  | time ( T4 GPU ) |
 | ------------- | ------------- |
-| `poppy.array( a, F )`  | 188 us |
-| `a.proj( )`  | 130 us  |
-| `a + b`  | 170 us  |
-| `a.trace( )` | 1.37 ms |
-| `a * c`  | 1.39 ms  |
-| `a @ b`  | 2.24 ms  |
-| `a.inv( )`  | 482 ms  |
+| `poppy.array( a, F )`  | `188  us` |
+| `a.proj( )`  | `130  us`  |
+| `a + b`  | `170  us`  |
+| `a.trace( )` | `329  us` |
+| `a * c`  | `1.39 ms`  |
+| `a @ b`  | `2.24 ms`  |
+| `a.inv( )`  | `370  ms`  |
 
 `poppy` uses standard Gaussian elmimination to invert matrices `mod p`.
 
