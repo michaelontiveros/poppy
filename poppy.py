@@ -6,7 +6,10 @@ import functools
 jax.config.update("jax_enable_x64", True)
 
 CONWAY = conway_polynomials.database()
-SEED   = 1
+SEED   = 0
+
+def seed( s = SEED ):
+    return jax.random.PRNGKey( s )
 
 @jax.jit
 def id( a, i ):
@@ -105,28 +108,28 @@ class field:
 
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def i2v( i, F ):
-    return jnp.floor_divide( i * F.ONE, F.BASIS ) % F.p
+def i2v( i, f ):
+    return jnp.floor_divide( i * f.ONE, f.BASIS ) % f.p
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def v2i( v, F ):
-    return jnp.sum( v * F.BASIS, dtype = jnp.int64 )
+def v2i( v, f ):
+    return jnp.sum( v * f.BASIS, dtype = jnp.int64 )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def v2m( v, F ):
-    return jnp.dot( v, F.X ) % F.p
+def v2m( v, f ):
+    return jnp.dot( v, f.X ) % f.p
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def m2v( m, F ):
+def m2v( m, f ):
     return m[ 0 ]
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def i2m( i, F ):
-    return v2m( i2v( i, F ), F )
+def i2m( i, f ):
+    return v2m( i2v( i, f ), f )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def m2i( m, F ):
-    return v2i( m[ 0 ], F )
+def m2i( m, f ):
+    return v2i( m[ 0 ], f )
 
 i2v_vmap = jax.vmap( i2v, in_axes = ( 0, None ) )
 v2i_vmap = jax.vmap( v2i, in_axes = ( 0, None ) )
@@ -136,57 +139,63 @@ i2m_vmap = jax.vmap( i2m, in_axes = ( 0, None ) )
 m2i_vmap = jax.vmap( m2i, in_axes = ( 0, None ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def block( m, F ):
+def block( m, f ):
     
     s = m.shape
-    n = F.n
+    n = f.n
     
     return m.reshape( s[ : -2 ] + ( s[ -2 ] // n, n, s[ -1 ] // n, n ) ).swapaxes( -2, -3 )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def ravel( m, F ):
+def ravel( m, f ):
     
-    n = F.n
+    n = f.n
     
-    return block( m, F ).reshape( ( -1, n, n ) )
+    return block( m, f ).reshape( ( -1, n, n ) )
 
 @functools.partial( jax.jit, static_argnums = ( 1, 2 ) )
-def unravel( i, F, s ):
+def unravel( i, f, s ):
 
-    n = F.n    
+    n = f.n    
 
     return i.reshape( s[ : -2 ] + ( s[ -2 ] // n, s[ -1 ] // n, n, n ) ).swapaxes( -2, -3 ).reshape( s )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def lift( i, F ):
+def lift( i, f ):
     
-    s = i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 ) if len( i.shape ) == 1 else ( 1, 1 )
-    m = i2m_vmap( i.ravel( ), F )
-    n = F.n
+    #s = i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 ) if len( i.shape ) == 1 else ( 1, 1 )
+    s = i.shape
+    m = i2m_vmap( i.ravel( ), f )
+    n = f.n
     
     return m.reshape( s + ( n, n ) ).swapaxes( -2, -3 ).reshape( s[ : -2 ] + ( s[ -2 ] * n, s[ -1 ] * n ) )
 
 @functools.partial( jax.jit, static_argnums = 1 )
-def proj( m, F ):
+def proj( m, f ):
     
-    s = m.shape[ : -2 ] + ( m.shape[ -2 ] // F.n, m.shape[ -1 ] // F.n )
-    i = m2i_vmap( ravel( m, F ), F )
+    s = m.shape[ : -2 ] + ( m.shape[ -2 ] // f.n, m.shape[ -1 ] // f.n )
+    i = m2i_vmap( ravel( m, f ), f )
     
     return i.reshape( s )
 
 class array:
-    def __init__( self, i, dtype = field( 2, 1 ), lifted = False ):
+    def __init__( self, a, dtype = field( 2, 1 ), lifted = False ):
     
+        if len( a.shape ) > 3:
+            print( 'ERROR: poppy arrays are three dimensional' )
+            return
+
         self.field = dtype 
-        self.shape = i.shape[ : -2 ] + ( i.shape[ -2 ] // self.field.n, i.shape[ -1 ] // self.field.n ) if lifted else i.shape if len( i.shape ) > 1 else ( i.shape[ 0 ], 1 )
-        self.lift  = i if lifted else lift( i, self.field )
-        
+        self.shape = ( 1, 1, a.shape[ 0 ] ) if len( a.shape ) == 1 else ( 1, a.shape[ 0 ], a.shape[ 1 ] ) if len( a.shape ) == 2 else a.shape
+        self.shape = ( self.shape[ -3 ], self.shape[ -2 ] // self.field.n, self.shape[ -1 ] // self.field.n ) if lifted else self.shape
+        self.lift  = a if lifted else lift( a, self.field )
+    
     def __mul__( self, a ):
         
-        if self.shape == ( ) or self.shape == ( 1, ) or self.shape == ( 1, 1 ):
+        if self.shape[ -1 ] * self.shape[ -2 ] == 1:
             return array( matmulmodp_vmap( self.lift, ravel(    a.lift, self.field ), self.field.p ).reshape(    a.lift.shape ), dtype = self.field, lifted = True )
         
-        if a.shape    == ( ) or    a.shape == ( 1, ) or    a.shape == ( 1, 1 ):               
+        if a.shape[ -1 ] * a.shape[ -2 ] == 1:               
             return array( matmulmodp_vmap(    a.lift, ravel( self.lift, self.field ), self.field.p ).reshape( self.lift.shape ), dtype = self.field, lifted = True )
         
     def __add__( self, a ):
@@ -248,9 +257,9 @@ class array:
         
             Rj, Ri = a[ j ], a[ i ] * self.field.INV[ a[ i, j ] ] % self.field.p
             a      = a.at[ i ].set( Rj ).at[ j ].set( Ri )
-            A      = ( a - jnp.outer(a[ : , j ].at[ j ] .set( 0 ), a[ j ] ) ) % self.field.p
+            a      = ( a - jnp.outer(a[ : , j ].at[ j ] .set( 0 ), a[ j ] ) ) % self.field.p
             
-            return A, A[ j ]
+            return a, a[ j ]
 
         @jax.jit
         def inv_jit( A ):
@@ -279,8 +288,10 @@ class array:
     def __repr__( self ):
         return f'array shape { self.shape }.\n' + repr( self.field ) 
 
-def random( shape, F, seed = SEED ):
+def random( shape, f, s = SEED ):
+
+    shape = ( 1, 1, shape ) if type( shape ) == int else shape
     
-    a = jax.random.randint( jax.random.PRNGKey( seed ), shape, 0, F.q, dtype = jnp.int64 )
+    a = jax.random.randint( s, shape, 0, f.q, dtype = jnp.int64 )
     
-    return array( a, F )
+    return array( a, f )
