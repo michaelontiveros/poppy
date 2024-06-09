@@ -46,10 +46,9 @@ class field:
         self.n = n
         self.q = p ** n 
         self.CONWAY = CONWAY[ p ][ n ]
-        self.RANGE  = jnp.arange(  n,      dtype = jnp.int64 )
-        self.ONE    = jnp.ones(    n,      dtype = jnp.int64 )
-        self.ZERO   = jnp.zeros( ( n, n ), dtype = jnp.int64 )
-        self.I      = jnp.eye(     n,      dtype = jnp.int64 )
+        self.RANGE  = jnp.arange(  n, dtype = jnp.int64 )
+        self.ONE    = jnp.ones(    n, dtype = jnp.int64 )
+        self.I      = jnp.eye(     n, dtype = jnp.int64 )
         self.BASIS  = jnp.power( p * self.ONE, self.RANGE )
         self.X      = self.companion( )
         self.INV    = self.inv( )
@@ -67,7 +66,9 @@ class field:
             V  = ( -jnp.array( self.CONWAY[ :-1 ], dtype = jnp.int64 ) ) % self.p
             
             # M is the companion matrix of the Conway polynomial.
-            M  = self.ZERO.at[ : -1, 1 : ].set( self.I[ 1 : , 1 : ] ).at[ -1 ].set( V )
+            M  = jnp.zeros( ( self.n, self.n ), dtype = jnp.int64 ) \
+                    .at[ : -1, 1 : ].set( self.I[ 1 : , 1 : ] ) \
+                    .at[ -1 ].set( V )
             
             # X is the array of powers of the companion matrix.
             X = jax.lax.associative_scan( matmul, stack( M, self.RANGE ).at[ 0 ].set( self.I ) )
@@ -94,7 +95,7 @@ class field:
         def inv_jit( ):
             
             A  = jnp.arange( 1, self.p, dtype = jnp.int64 )
-            AA = jnp.concatenate( [ jnp.ones( 1, dtype = jnp.int64 ), jnp.flip( A[ 1 : ] ) ] )
+            AA = jnp.concatenate( [ self.ONE[ : 1 ], jnp.flip( A[ 1 : ] ) ] )
             B  = jnp.flip( jax.lax.associative_scan( prod, AA ) )
             C  = jnp.ones( self.p - 1, dtype = jnp.int64 ).at[ 0 ].set( self.p - 1 )
             ABC = jnp.vstack( [ A, B, C ] ).transpose( )
