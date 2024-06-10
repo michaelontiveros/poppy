@@ -1,3 +1,6 @@
+# BEGIN POPPY
+# BEGIN initialize
+
 import jax
 import jax.numpy as jnp
 import conway_polynomials
@@ -9,7 +12,9 @@ jax.config.update("jax_enable_x64", True)
 # Finite fields are polynomial rings modulo Conway polynomials.
 CONWAY = conway_polynomials.database()
 
+# END initialize
 # BEGIN modular arithmetic
+
 @functools.partial( jax.jit, static_argnums = 2 )
 def pmul( a, b, p ):
     return ( a * b ) % p
@@ -31,9 +36,10 @@ def pmatmul( a, b, p ):
     return ( a @ b ) % p
 
 pmatmul_vmap = jax.vmap( pmatmul, in_axes = ( None, 0, None ) )
-# END modular arithmetic
 
+# END modular arithmetic
 # BEGIN field
+
 class field:
     def __init__( self, p, n ):
         
@@ -108,9 +114,10 @@ class field:
 
     def __repr__( self ):
         return f'field order  { self.q }.'
-# END field
 
+# END field
 # BEGIN reshape operations
+
 @functools.partial( jax.jit, static_argnums = 1 )
 def block( m, f ):
     
@@ -132,9 +139,10 @@ def unravel( i, f, s ):
     n = f.n    
 
     return i.reshape( s[ : -2 ] + ( s[ -2 ] // n, s[ -1 ] // n, n, n ) ).swapaxes( -2, -3 ).reshape( s )
-# END reshape operations
 
+# END reshape operations
 # BEGIN en/de-coding operations
+
 @functools.partial( jax.jit, static_argnums = 1 )
 def i2v( i, f ):
     return jnp.floor_divide( i * f.ONE, f.BASIS ) % f.p
@@ -169,8 +177,8 @@ m2i_vmap = jax.vmap( m2i, in_axes = ( 0, None ) )
 @functools.partial( jax.jit, static_argnums = 1 )
 def lift( i, f ):
     
-    s = i.shape
     m = i2m_vmap( i.ravel( ), f )
+    s = i.shape
     n = f.n
     
     return m.reshape( s + ( n, n ) ).swapaxes( -2, -3 ).reshape( s[ : -2 ] + ( s[ -2 ] * n, s[ -1 ] * n ) )
@@ -178,13 +186,14 @@ def lift( i, f ):
 @functools.partial( jax.jit, static_argnums = 1 )
 def proj( m, f ):
     
-    s = m.shape[ : -2 ] + ( m.shape[ -2 ] // f.n, m.shape[ -1 ] // f.n )
     i = m2i_vmap( ravel( m, f ), f )
+    s = m.shape[ : -2 ] + ( m.shape[ -2 ] // f.n, m.shape[ -1 ] // f.n )
     
     return i.reshape( s )
-# END en/de-coding operations
 
+# END en/de-coding operations
 # BEGIN array
+
 class array:
     def __init__( self, a, dtype = field( 2, 1 ), lifted = False ):
     
@@ -294,9 +303,10 @@ class array:
 
     def __repr__( self ):
         return f'array shape { self.shape }.\n' + repr( self.field ) 
-# END array
 
+# END array
 # BEGIN random
+
 SEED   = 0
 
 def seed( s = SEED ):
@@ -309,4 +319,6 @@ def random( shape, f, s = SEED ):
     a = jax.random.randint( s, shape, 0, f.q, dtype = jnp.int64 )
     
     return array( a, f )
+
 # END random
+# END POPPY
