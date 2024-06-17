@@ -1,24 +1,23 @@
 # Introduction
-`poppy` is a python package for linear algebra over finite fields smaller than `2^40`. 
-It has two classes: `field` and `array`. It is written in `jax`.
+`poppy` is a python package for linear algebra over finite fields. It has two classes: `field` and `array`. It is written in `jax`.
 
 
 
 # Notation
-`q = p^n` is a prime power.
+`q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
 
-`F = F_q` is a finite field.
+`y = y_q` is the Conway polynomial. 
+
+`F = F_q` is the finite field.
 
 `M_d( F )` is the ring of `d x d` matrices over `F`.
-
-`y = y_q` is the Conway polynomial.
 
 `X = X_y` is the `n x n` companion matrix.
 
 
 # Construction
-The injective homomorphism `h : F_q --> M_n( F_p )` mapping `f mod y` to `f( X )` 
-extends linearly to a homomorphism `H : M_d( F_q ) --> M_nd( F_p )`, reducing linear algebra over finite fields
+The injective homomorphism `h : F_q --> M_n( F_p )` sending `f mod y` to `f( X )` 
+extends linearly to an injective homomorphism `H : M_d( F_q ) --> M_nd( F_p )`. This reduces linear algebra over finite fields
 to linear algebra `mod p`. GPU optimized machine learning libraries like `jax` do linear algebra operations
 like large matrix multiply very quickly `mod p`.
 
