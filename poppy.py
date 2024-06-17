@@ -6,18 +6,23 @@ import jax.numpy as jnp
 import conway_polynomials
 import functools
 
-# 64 bit integer arrays encode numbers in finite fields.
 jax.config.update("jax_enable_x64", True)
+
+# 64 bit integer arrays encode numbers in finite fields.
+DTYPE = jnp.int64
 
 # Finite fields are polynomial rings modulo Conway polynomials.
 CONWAY = conway_polynomials.database()
 
+# The pseudo random number generator has a default seed.
+SEED = 0 
+
 # END initialize
 # BEGIN modular arithmetic
 
-@functools.partial( jax.jit, static_argnums = 2 )
-def pmul( a, b, p ):
-    return ( a * b ) % p
+@functools.partial( jax.jit, static_argnums = 1 )
+def pneg( a, p ):
+    return ( -a ) % p
 
 @functools.partial( jax.jit, static_argnums = 2 )
 def padd( a, b, p ):
@@ -27,9 +32,9 @@ def padd( a, b, p ):
 def psub( a, b, p ):
     return ( a - b ) % p
 
-@functools.partial( jax.jit, static_argnums = 1 )
-def pneg( a, p ):
-    return ( -a ) % p
+@functools.partial( jax.jit, static_argnums = 2 )
+def pmul( a, b, p ):
+    return ( a * b ) % p
 
 @functools.partial( jax.jit, static_argnums = 2 )
 def pmatmul( a, b, p ):
@@ -47,15 +52,16 @@ class field:
         self.n = n
         self.q = p ** n 
         self.CONWAY = CONWAY[ p ][ n ]
-        self.RANGE  = jnp.arange(  n, dtype = jnp.int64 )
-        self.ONE    = jnp.ones(    n, dtype = jnp.int64 )
-        self.I      = jnp.eye(     n, dtype = jnp.int64 )
+        self.RANGE  = jnp.arange(  n, dtype = DTYPE )
+        self.ONE    = jnp.ones(    n, dtype = DTYPE )
+        self.I      = jnp.eye(     n, dtype = DTYPE )
         self.BASIS  = jnp.power( p * self.ONE, self.RANGE )
-        #self.BO     = jnp.array( [ int( b ) for b in reversed( bin( self.q - 1 )[ 2 : ] ) ] ) # BO is the binary expansion of the order of the multiplicative group.
-        self.X      = self.companion( )
+        #self.BO = jnp.array( [ int( b ) for b in reversed( bin( self.q - 1 )[ 2 : ] ) ] ) 
+        ## BO is the binary expansion of the order of the multiplicative group.
+        self.X      = self.x( )
         self.INV    = self.inv( )
         
-    def companion( self ):
+    def x( self ):
 
         @jax.jit
         def id( a, i ):
@@ -68,13 +74,13 @@ class field:
             return pmatmul( a, b, self.p )
         
         @jax.jit
-        def companion_jit( ):
+        def x_scan( ):
             
             # V is the vector of subleading coefficients of -1 * ( Conway polynomial ).
-            V  = ( -jnp.array( self.CONWAY[ :-1 ], dtype = jnp.int64 ) ) % self.p
+            V  = ( -jnp.array( self.CONWAY[ :-1 ], dtype = DTYPE ) ) % self.p
             
             # M is the companion matrix of the Conway polynomial.
-            M  = jnp.zeros( ( self.n, self.n ), dtype = jnp.int64 ) \
+            M  = jnp.zeros( ( self.n, self.n ), dtype = DTYPE ) \
                     .at[ : -1, 1 : ].set( self.I[ 1 : , 1 : ] ) \
                     .at[ -1 ].set( V )
             
@@ -83,7 +89,7 @@ class field:
             
             return X
 
-        return companion_jit( )
+        return x_scan( )
     
     def inv( self ):
         
@@ -92,7 +98,7 @@ class field:
             return pmul( a, b, self.p )
         
         @functools.partial( jax.jit, static_argnums = 1 )
-        def INV( ABC, i ):
+        def inv_jit( ABC, i ):
             
             C = mul( ABC[ i - 2, 0 ], ABC[ i - 2, 2 ] )
             ABC =  ABC.at[ i - 1, 2 ].set( C )
@@ -100,17 +106,17 @@ class field:
             return ABC, mul( ABC[ i - 1, 1 ], C )
         
         @jax.jit
-        def inv_jit( ):
+        def inv_scan( ):
             
-            A  = jnp.arange( 1, self.p, dtype = jnp.int64 )
+            A  = jnp.arange( 1, self.p, dtype = DTYPE )
             AA = jnp.concatenate( [ self.ONE[ : 1 ], jnp.flip( A[ 1 : ] ) ] )
             B  = jnp.flip( jax.lax.associative_scan( mul, AA ) )
-            C  = jnp.ones( self.p - 1, dtype = jnp.int64 ).at[ 0 ].set( self.p - 1 )
+            C  = jnp.ones( self.p - 1, dtype = DTYPE ).at[ 0 ].set( self.p - 1 )
             ABC = jnp.vstack( [ A, B, C ] ).transpose( )
             
-            return jnp.concatenate( [ jnp.zeros( 1, dtype = jnp.int64 ), jax.lax.scan( INV, ABC, A )[ 1 ] ] )
+            return jnp.concatenate( [ jnp.zeros( 1, dtype = DTYPE ), jax.lax.scan( inv_jit, ABC, A )[ 1 ] ] )
         
-        return inv_jit( )
+        return inv_scan( )
 
     def __repr__( self ):
         return f'field order  { self.q }.'
@@ -149,7 +155,7 @@ def i2v( i, f ):
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def v2i( v, f ):
-    return jnp.sum( v * f.BASIS, dtype = jnp.int64 )
+    return jnp.sum( v * f.BASIS, dtype = DTYPE )
 
 @functools.partial( jax.jit, static_argnums = 1 )
 def v2m( v, f ):
@@ -209,10 +215,16 @@ class array:
     def __mul__( self, a ):
         
         if self.shape[ -1 ] * self.shape[ -2 ] == 1:
-            return array( pmatmul_vmap( self.lift, ravel(    a.lift, self.field ), self.field.p ).reshape(    a.lift.shape ), dtype = self.field, lifted = True )
+            
+            b = pmatmul_vmap( self.lift, ravel( a.lift, self.field ), self.field.p ).reshape( a.lift.shape )
+            
+            return array( b, dtype = self.field, lifted = True )
         
-        if a.shape[ -1 ] * a.shape[ -2 ] == 1:               
-            return array( pmatmul_vmap(    a.lift, ravel( self.lift, self.field ), self.field.p ).reshape( self.lift.shape ), dtype = self.field, lifted = True )
+        if a.shape[ -1 ] * a.shape[ -2 ] == 1:   
+            
+            b = pmatmul_vmap( a.lift, ravel( self.lift, self.field ), self.field.p ).reshape( self.lift.shape )            
+            
+            return array( b, dtype = self.field, lifted = True )
         
     def __add__( self, a ):
         return array( padd( self.lift, a.lift, self.field.p ), dtype = self.field, lifted = True )
@@ -234,7 +246,7 @@ class array:
         @functools.partial( jax.jit, static_argnums = 1 )
         def row_reduce_jit( a, j ):    
             
-            mask = jnp.where( jnp.arange( self.lift.shape[ 0 ], dtype = jnp.int64 ) < j, 0, 1 )
+            mask = jnp.where( jnp.arange( self.lift.shape[ 0 ], dtype = DTYPE ) < j, 0, 1 )
             i    = jnp.argmax( mask * a[ : , j ] != 0 )
             
             if a.at[ i, j ] == 0:
@@ -250,9 +262,9 @@ class array:
         def inv_jit( ):
             
             N     = self.lift.shape[ 0 ]
-            I     = jnp.eye( N, dtype = jnp.int64 )
+            I     = jnp.eye( N, dtype = DTYPE )
             MI    = jnp.hstack( [ self.lift, I ] )
-            RANGE = jnp.arange( N, dtype = jnp.int64 )
+            RANGE = jnp.arange( N, dtype = DTYPE )
             
             return jax.lax.scan( row_reduce_jit, MI, RANGE )[ 0 ][ : , N : ]
         
@@ -265,7 +277,7 @@ class array:
         @functools.partial( jax.jit, static_argnums = 1 )
         def row_reduce_jit( a, j ):    
             
-            mask = jnp.where( jnp.arange( self.field.n, dtype = jnp.int64 ) < j, 0, 1 )
+            mask = jnp.where( jnp.arange( self.field.n, dtype = DTYPE ) < j, 0, 1 )
             i    = jnp.argmax( mask * a[ : , j ] != 0 )
             
             if a.at[ i, j ] == 0:
@@ -307,7 +319,7 @@ class array:
 # END array
 # BEGIN random
 
-SEED   = 0
+SEED = 0
 
 def seed( s = SEED ):
     return jax.random.PRNGKey( s )
@@ -316,7 +328,7 @@ def random( shape, f, s = SEED ):
 
     shape = ( 1, 1, shape ) if type( shape ) == int else shape
     
-    a = jax.random.randint( s, shape, 0, f.q, dtype = jnp.int64 )
+    a = jax.random.randint( s, shape, 0, f.q, dtype = DTYPE )
     
     return array( a, f )
 
