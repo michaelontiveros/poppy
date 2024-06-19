@@ -43,6 +43,39 @@ def pmatmul( a, b, p ):
 pmatmul_vmap = jax.vmap( pmatmul, in_axes = ( None, 0, None ) )
 
 # END modular arithmetic
+# BEGIN linear algebra
+
+@functools.partial( jax.jit, static_argnums = 2 )
+def ptrsm( a, b, p ): # mod p triangular solve.
+  
+    M = a.shape[ 0 ]
+    N = b.shape[ 1 ]
+    I = jnp.eye( N, M, dtype = DTYPE )
+    C = jnp.arange( N )
+    R = jnp.arange( 1, M )
+
+    @jax.jit 
+    def ptrsm_vmap( a1, b1 ):
+
+        @jax.jit
+        def ptrsm_scan( a2, b2, i ): 
+
+            @jax.jit
+            def f( x, j ):
+  
+                x = x.at[ j ].set( x[ j ] + ( 1 - x[ j ] ) * ( b2[ j ] - jnp.dot( a2[ j ], x ) ) % p )
+  
+                return x, x[ j ]  
+  
+            # scan the rows.
+            return jax.lax.scan( f, I[ i ], R )[ 0 ]
+
+        # vmap the columns.
+        return jax.vmap( ptrsm_scan, in_axes = ( None, 0, 0 ) )( a1, b1.transpose( ), C ).transpose( )
+
+    return ptrsm_vmap( a, b )
+
+# END linear algebra
 # BEGIN field
 
 class field:
@@ -70,6 +103,10 @@ class field:
         stack = jax.vmap( id, ( None, 0 ) )
         
         @jax.jit
+        def neg( a ):
+            return pneg( a, self.p )
+        
+        @jax.jit
         def matmul( a, b ):
             return pmatmul( a, b, self.p )
         
@@ -77,7 +114,7 @@ class field:
         def x_scan( ):
             
             # V is the vector of subleading coefficients of -1 * ( Conway polynomial ).
-            V  = ( -jnp.array( self.CONWAY[ :-1 ], dtype = DTYPE ) ) % self.p
+            V  = neg( jnp.array( self.CONWAY[ :-1 ], dtype = DTYPE ) )
             
             # M is the companion matrix of the Conway polynomial.
             M  = jnp.zeros( ( self.n, self.n ), dtype = DTYPE ) \
@@ -321,14 +358,14 @@ class array:
 
 SEED = 0
 
-def seed( s = SEED ):
+def key( s = SEED ):
     return jax.random.PRNGKey( s )
 
 def random( shape, f, s = SEED ):
 
     shape = ( 1, 1, shape ) if type( shape ) == int else shape
     
-    a = jax.random.randint( s, shape, 0, f.q, dtype = DTYPE )
+    a = jax.random.randint( key( s ), shape, 0, f.q, dtype = DTYPE )
     
     return array( a, f )
 
