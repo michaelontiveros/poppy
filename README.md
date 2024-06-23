@@ -16,7 +16,7 @@
 
 
 # Construction
-The injective homomorphism from `F_q` to `M_n( F_p )` that sends `f mod y` to `f( X )`,
+The injective homomorphism from `F_q` to `M_n( F_p )` that sends `f mod y` to `f(X)`,
 extends linearly to an injective homomorphism from `M_d( F_q )` to `M_nd( F_p )`, reducing linear algebra over finite fields
 to linear algebra `mod p`. GPU optimized machine learning libraries like `jax` do linear algebra operations
 like large matrix multiply very quickly `mod p`.
@@ -29,16 +29,16 @@ like large matrix multiply very quickly `mod p`.
  
 `a`, `b` are random `222 x 222` matrices over `F`.
 
-| operation  | time ( T4 GPU ) |
+| operation  | time (T4 GPU) |
 | ------------- | ------------- |
-| `poppy.array( a, F )`  | `188 us` |
-| `a.proj( )`  | `130 us`  |
+| `poppy.array(a, F)`  | `188 us` |
+| `a.proj()`  | `130 us`  |
 | `a + b`  | `170 us`  |
-| `a.trace( )` | `329 us` |
+| `a.trace()` | `329 us` |
 | `a * c`  | `1.4 ms`  |
 | `a @ b`  | `2.2 ms`  |
-| `a.lu( )`  | `18  ms`  |
-| `a.det( )`  | `18  ms`  |
-| `a.inv( )`  | `38  ms`  |
+| `a.lu()`  | `18  ms`  |
+| `a.det()`  | `18  ms`  |
+| `a.inv()`  | `38  ms`  |
 
 
