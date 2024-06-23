@@ -46,7 +46,7 @@ pmatmul_vmap = jax.vmap(pmatmul, in_axes = (None, 0, None))
 
 @jax.jit
 def ptrsm(a, b, p): # mod p triangular solve.
-  
+    
     R = jnp.arange(len(a), dtype = DTYPE)
 
     def ptrsm_vmap(bb): # bb is the matrix b.
@@ -61,26 +61,24 @@ def ptrsm(a, b, p): # mod p triangular solve.
 
 @jax.jit
 def pgetrf2(aperm, inv): # sequential lu decomposition.
-
+    
     p = 1+inv[-1] # p is prime.
     I = jnp.arange(aperm.shape[0])
     J = jnp.arange(aperm.shape[1]-1)
     R = jnp.arange(min(len(I),len(J)))
   
     def f(ap, i):
-
         j = jnp.argmax( jnp.where(I >= i, ap[:,i], -1) ) # search column i for j.
         ap = ap.at[[i,j],:].set( ap[[j,i],:] ) # swap rows i and j.
         ap = ap.at[:,i].set( jnp.where( I > i, (ap[:,i] * inv[ ap[i,i] ]) % p, ap[:,i] ) )  # scale column i.
-        ap = ap.at[:,:-1].set((ap[:,:-1] - jnp.where((I[:,None] > i) & (J[None,:] > i), jnp.outer(ap[:,i], ap[i,:-1]), 0))%p) # geru.
-        
+        ap = ap.at[:,:-1].set((ap[:,:-1] - jnp.where((I[:,None] > i) & (J[None,:] > i), jnp.outer(ap[:,i], ap[i,:-1]), 0))%p) # geru.     
         return ap, i
 
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def pgetrf(a, inv, b): # blocked lu decompposition.
-
+    
     p = 1+inv[-1]
     m = min(a.shape)
     perm = jnp.arange(len(a))
@@ -98,15 +96,14 @@ def pgetrf(a, inv, b): # blocked lu decompposition.
     u = jnp.tril(a.T).T
     d = jnp.diagonal(u)
     iperm = jnp.arange(len(perm))
-    iperm = iperm.at[perm].set(iperm)
-  
+    iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm
 
 # END linear algebra
 # BEGIN field
 
 class field:
-    def __init__(self, p, n):
+    def __init__(self, p, n):    
         
         self.p = p
         self.n = n
@@ -161,19 +158,17 @@ class field:
         def inv_jit(ABC, i):
             
             C = mul(ABC[i-2, 0], ABC[i-2, 2])
-            ABC = ABC.at[i-1, 2].set(C)
-            
+            ABC = ABC.at[i-1, 2].set(C)   
             return ABC, mul(ABC[i-1, 1], C)
         
         @jax.jit
-        def inv_scan():
+        def inv_scan():    
             
             A = jnp.arange(1, self.p, dtype = DTYPE)
             AA = jnp.concatenate([self.ONE[:1], jnp.flip(A[1:])])
             B = jnp.flip(jax.lax.associative_scan(mul,AA))
             C = jnp.ones(self.p - 1, dtype = DTYPE).at[0].set(self.p - 1)
-            ABC = jnp.vstack([A,B,C]).T
-            
+            ABC = jnp.vstack([A,B,C]).T       
             return jnp.concatenate([jnp.zeros(1, dtype = DTYPE), jax.lax.scan(inv_jit, ABC, A)[1]])
         
         return inv_scan()
@@ -185,25 +180,22 @@ class field:
 # BEGIN reshape operations
 
 @functools.partial(jax.jit, static_argnums = 1)
-def block(m,f):
+def block(m,f): 
     
     s = m.shape
-    n = f.n
-    
+    n = f.n 
     return m.reshape(s[:-2] + (s[-2]//n, n, s[-1]//n, n)).swapaxes(-2, -3)
 
 @functools.partial(jax.jit, static_argnums = 1)
 def ravel(m,f):
     
     n = f.n
-    
     return block(m,f).reshape((-1, n, n))
 
 @functools.partial(jax.jit, static_argnums = (1,2))
 def unravel(i, f, s):
-
+    
     n = f.n    
-
     return i.reshape(s[:-2] + (s[-2]//n, s[-1]//n, n, n)).swapaxes(-2, -3).reshape(s)
 
 # END reshape operations
@@ -241,20 +233,18 @@ i2m_vmap = jax.vmap(i2m, in_axes = (0, None))
 m2i_vmap = jax.vmap(m2i, in_axes = (0, None))
 
 @functools.partial(jax.jit, static_argnums = 1)
-def lift(i,f):
+def lift(i,f): 
     
     m = i2m_vmap(i.ravel(), f)
     s = i.shape
-    n = f.n
-    
+    n = f.n 
     return m.reshape(s + (n,n)).swapaxes(-2, -3).reshape(s[:-2] + (s[-2]*n, s[-1]*n))
 
 @functools.partial(jax.jit, static_argnums = 1)
-def proj(m,f):
+def proj(m,f):   
     
     i = m2i_vmap(ravel(m,f), f)
-    s = m.shape[:-2] + (m.shape[-2]//f.n, m.shape[-1]//f.n)
-    
+    s = m.shape[:-2] + (m.shape[-2]//f.n, m.shape[-1]//f.n)  
     return i.reshape(s)
 
 # END en/de-coding operations
@@ -283,16 +273,12 @@ class array:
 
     def __mul__(self, a):
         
-        if self.shape[-1]*self.shape[-2] == 1:
-            
-            b = pmatmul_vmap(self.lift, ravel(a.lift, self.field), self.field.p).reshape(a.lift.shape)
-            
+        if self.shape[-1]*self.shape[-2] == 1:      
+            b = pmatmul_vmap(self.lift, ravel(a.lift, self.field), self.field.p).reshape(a.lift.shape)        
             return array(b, dtype = self.field, lifted = True)
         
-        if a.shape[-1]*a.shape[-2] == 1:   
-            
-            b = pmatmul_vmap(a.lift, ravel(self.lift, self.field), self.field.p).reshape(self.lift.shape)            
-            
+        if a.shape[-1]*a.shape[-2] == 1:         
+            b = pmatmul_vmap(a.lift, ravel(self.lift, self.field), self.field.p).reshape(self.lift.shape)                     
             return array(b, dtype = self.field, lifted = True)
     
     def __matmul__(self, a):
@@ -302,29 +288,27 @@ class array:
         return pgetrf(self.lift, self.field.INV, 32)
 
     def inv(self):
-  
+        
         I = jnp.eye(len(self.lift), dtype = DTYPE)
         l, u, d, iperm = pgetrf(self.lift, self.field.INV, 32)
         D = self.field.INV[d]
         #LU = jax.vmap(ptrsm, in_axes=(0,0,None))(jnp.array( [l, (D*u%p).T] ), jnp.array( [I, D*I]),p)
         L = ptrsm(l, I, self.field.p) # L = 1/l.
-        U = ptrsm((D*u%self.field.p).T, D*I, self.field.p).T # U = 1/u.
-        
+        U = ptrsm((D*u%self.field.p).T, D*I, self.field.p).T # U = 1/u.      
         return array((U@L%self.field.p)[:,iperm], dtype = self.field, lifted = True)
 
-    def det(self):
+    def det(self):       
         
-        l, u, d, iperm = pgetrf(self.lift, self.field.INV, 32)
-        
+        l, u, d, iperm = pgetrf(self.lift, self.field.INV, 32)      
         return jax.lax.associative_scan(lambda a,b: a*b%self.field.p, d)[-1]
     
-    def inv_scan(self):
+    def inv_scan(self):   
         
         assert len(self.shape) > 1
         assert self.shape[-1] == self.shape[-2]
         
         @functools.partial(jax.jit, static_argnums = 1)
-        def row_reduce_jit(a,j):    
+        def row_reduce_jit(a,j):     
             
             mask = jnp.where(jnp.arange(self.lift.shape[0], dtype = DTYPE) < j, 0, 1)
             i = jnp.argmax(mask*a[:,j] != 0)
@@ -334,63 +318,27 @@ class array:
         
             Rj, Ri = a[j], (a[i]*self.field.INV[a[i,j]]) % self.field.p
             a = a.at[i].set(Rj).at[j].set(Ri)
-            A = (a - jnp.outer(a[:,j].at[j].set(0), a[j])) % self.field.p
-            
+            A = (a - jnp.outer(a[:,j].at[j].set(0), a[j])) % self.field.p         
             return A, A[j]
         
         @jax.jit
-        def inv_jit():
+        def inv_jit():          
             
             N = self.lift.shape[0]
             I = jnp.eye(N, dtype = DTYPE)
             MI = jnp.hstack([self.lift, I])
-            RANGE = jnp.arange(N, dtype = DTYPE)
-            
+            RANGE = jnp.arange(N, dtype = DTYPE)          
             return jax.lax.scan(row_reduce_jit, MI, RANGE)[0][:, N:]
         
-        INV = inv_jit()
-        
+        INV = inv_jit()       
         return array(INV, dtype = self.field, lifted = True)
     
-    def reciprocal(self):
-        
-        @functools.partial(jax.jit, static_argnums = 1)
-        def row_reduce_jit(a,j):    
-            
-            mask = jnp.where(jnp.arange(self.field.n, dtype = DTYPE) < j, 0, 1)
-            i = jnp.argmax(mask*a[:, j] != 0)
-            
-            if a.at[i,j] == 0:
-                return a, a[j]
-        
-            Rj, Ri = a[j], (a[i]*self.field.INV[a[i,j]]) % self.field.p
-            a = a.at[i].set(Rj).at[j].set(Ri)
-            a = (a - jnp.outer(a[:, j].at[j].set(0), a[j])) % self.field.p
-            
-            return a, a[j]
-
-        @jax.jit
-        def inv_jit(A):
-            
-            AI = jnp.hstack([A, self.field.I])
-
-            return jax.lax.scan(row_reduce_jit, AI, self.field.RANGE)[0][:, self.field.n:] 
-            
-
-        inv_vmap = jax.vmap(inv_jit)
-        
-        R = ravel(self.lift, self.field)
-        INV = unravel(inv_vmap(R), self.field, self.lift.shape)
-        
-        return array(INV, dtype = self.field, lifted = True)
-
     def proj(self):
         return proj(self.lift, self.field)
 
     def trace(self):
-
-        T = jnp.trace(block(self.lift, self.field)) % self.field.p
         
+        T = jnp.trace(block(self.lift, self.field)) % self.field.p     
         return array(T, dtype = self.field, lifted = True)
 
     def __repr__(self):
@@ -405,11 +353,9 @@ def key(s = SEED):
     return jax.random.PRNGKey(s)
 
 def random(shape, f, s = SEED):
-
+    
     shape = (1, 1, shape) if type(shape) == int else shape
-    
     a = jax.random.randint(key(s), shape, 0, f.q, dtype = DTYPE)
-    
     return array(a,f)
 
 # END random
