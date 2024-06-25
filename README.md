@@ -38,7 +38,6 @@ like large matrix multiply very quickly `mod p`.
 | `a * c`  | `1.4 ms`  |
 | `a @ b`  | `2.2 ms`  |
 | `a.lu()`  | `18  ms`  |
-| `a.det()`  | `18  ms`  |
 | `a.inv()`  | `38  ms`  |
-
+| `a.det()`  | `42  ms`  |
 
