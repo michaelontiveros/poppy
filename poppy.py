@@ -45,7 +45,7 @@ pmatmul_vmap = jax.vmap(pmatmul, in_axes = (None, 0, None))
 # BEGIN linear algebra
 
 @jax.jit
-def ptrsm(a, b, p): # mod p triangular solve.
+def ptrsm(a, b, p): # triangular solve mod p.
     
     R = jnp.arange(len(a), dtype = DTYPE)
 
@@ -60,7 +60,23 @@ def ptrsm(a, b, p): # mod p triangular solve.
     return ptrsm_vmap(b)
 
 @jax.jit
-def pgetrf2(aperm, inv): # sequential lu decomposition.
+def qtrsm(a, b, p): # triangular solve over a finite field.
+    
+    R = jnp.arange(len(a), dtype = DTYPE) # a has shape (r,c,n,n).
+    ZERO = jnp.zeros((b.shape[-1],b.shape[-1]), dtype = jnp.int64) # b has shape (c,d,n,n).
+
+    def ptrsm_vmap(bb): # bb is the array b.
+        def ptrsm_scan(bc): # bc has shape (c,n,n). it is a column of bb.
+            def f(x,j):
+                x = x.at[j].set((bc[j] - jnp.tensordot(a[j], x, axes = ([0,2],[0,1]))) % p)
+                return x, x[j]  
+            return jax.lax.scan( f, jnp.where( R[:,None,None] == 0, bc[0], ZERO ), R[1:] )[0] # scan the rows of a.
+        return jax.vmap(ptrsm_scan)(bb.swapaxes(0,1)).swapaxes(0,1)  # vmap the columns of b.
+
+    return ptrsm_vmap(b)
+
+@jax.jit
+def pgetrf2(aperm, inv): # sequential lu decomposition mod p.
     
     p = 1+inv[-1] # p is prime.
     I = jnp.arange(aperm.shape[0])
@@ -68,16 +84,37 @@ def pgetrf2(aperm, inv): # sequential lu decomposition.
     R = jnp.arange(min(len(I),len(J)))
   
     def f(ap, i):
-        j = jnp.argmax( jnp.where(I >= i, ap[:,i], -1) ) # search column i for j.
+        j = jnp.argmax(jnp.where(I >= i, ap[:,i], -1)) # search column i for j.
         ap = ap.at[[i,j],:].set( ap[[j,i],:] ) # swap rows i and j.
         ap = ap.at[:,i].set( jnp.where( I > i, (ap[:,i] * inv[ ap[i,i] ]) % p, ap[:,i] ) )  # scale column i.
-        ap = ap.at[:,:-1].set((ap[:,:-1] - jnp.where((I[:,None] > i) & (J[None,:] > i), jnp.outer(ap[:,i], ap[i,:-1]), 0))%p) # geru.     
+        ap = ap.at[:,:-1].set((ap[:,:-1] - jnp.where((I[:,None] > i) & (J[None,:] > i), jnp.outer(ap[:,i], ap[i,:-1]), 0)) % p) # geru.     
         return ap, i
 
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
+@jax.jit
+def qgetrf2(aperm, inv): # sequential lu decomposition over a finite field.
+    
+    a, perm, parity = aperm
+    p = 1+inv[-1] # p is prime.
+    I = jnp.arange(a.shape[0])
+    J = jnp.arange(a.shape[1])
+    R = jnp.arange(min(len(I),len(J)))
+  
+    def f(ap, i):
+        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (n,). parity has shape (1,).
+        j = jnp.argmax(jnp.where(I >= i, a[:,i,0,0], -1)) # search column i for j.
+        perm = perm.at[[i,j],].set(perm[[j,i],]) # swap rows i and j.
+        a = a.at[[i,j],:,:,:].set( a[[j,i],:,:,:] ) # swap rows i and j.
+        a = a.at[:,i,:,:].set( jnp.where( I[:,None,None] > i, (jnp.tensordot( a[:,i,:,:], pinv(a[i,i,:,:], inv, 32), axes = (2,0))) % p, a[:,i,:,:] ) )  # scale column i.
+        a = a.at[:,:,:,:].set((a[:,:,:,:] - jnp.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jnp.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # geru.     
+        parity = (parity + jnp.count_nonzero(i-j)) % 2
+        return (a, perm, parity), j
+
+    return jax.lax.scan(f, aperm, R, unroll = False)[0]
+
 @functools.partial(jax.jit, static_argnums = 2)
-def pgetrf(a, inv, b): # blocked lu decompposition.
+def pgetrf(a, inv, b): # blocked lu decompposition mod p.
     
     p = 1+inv[-1]
     m = min(a.shape)
@@ -85,12 +122,12 @@ def pgetrf(a, inv, b): # blocked lu decompposition.
   
     for i in range(0, m, b):
         bb = min(m-i, b)
-        ap = pgetrf2(jnp.hstack([ a[i:, i:i+bb], jnp.arange(i,len(a)).reshape((-1,1)) ]), inv)
-        perm = perm.at[i:].set( perm[ap[:,-1]] )
-        a = a.at[i:,:].set( a[ap[:,-1], :] ) # swap rows.
-        a = a.at[i:, i:i+bb].set( ap[:,:-1] )  # update block C.
+        ap = pgetrf2(jnp.hstack([a[i:, i:i+bb], jnp.arange(i,len(a)).reshape((-1,1))]), inv)
+        perm = perm.at[i:].set(perm[ap[:,-1]])
+        a = a.at[i:,:].set(a[ap[:,-1], :]) # swap rows.
+        a = a.at[i:, i:i+bb].set( ap[:,:-1])  # update block C.
         a = a.at[i:i+bb, i+bb:].set(ptrsm( a[i:i+bb, i:i+bb], a[i:i+bb, i+bb:], p )) # update block B.
-        a = a.at[i+bb:, i+bb:].set( (a[i+bb:, i+bb:] - jax.lax.dot( a[i+bb: , i:i+bb], a[i:i+bb, i+bb:] )) % p) # update block D.
+        a = a.at[i+bb:, i+bb:].set((a[i+bb:, i+bb:] - jax.lax.dot(a[i+bb: , i:i+bb], a[i:i+bb, i+bb:])) % p) # update block D.
 
     l = jnp.fill_diagonal(jnp.tril(a), 1, inplace = False)
     u = jnp.tril(a.T).T
@@ -98,6 +135,84 @@ def pgetrf(a, inv, b): # blocked lu decompposition.
     iperm = jnp.arange(len(perm))
     iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm
+
+@functools.partial(jax.jit, static_argnums = 2)
+def qgetrf(a, inv, b): # blocked lu decompposition over a finite field.
+    
+    p = 1+inv[-1]
+    r,c = a.shape[0], a.shape[1]
+    m = min(r,c)
+    R = jnp.arange(r)
+    perm = jnp.arange(r)
+    parity = jnp.zeros(1, dtype = jnp.int64)
+  
+    for i in range(0, m, b):
+        bb = min(m-i, b)
+        ai, permi, pari = qgetrf2((a[i:,i:i+bb,:,:], R[i:], 0), inv) # a has shape (r-i,bb,n,n). pi has shape (r-i,)
+        parity = (parity + pari) % 2
+        perm = perm.at[i:].set(perm[permi])
+        a = a.at[i:,:,:,:].set(a[permi,:,:,:]) # swap rows.
+        a = a.at[i:,i:i+bb,:,:].set(ai)  # update block C.
+        a = a.at[i:i+bb,i+bb:,:,:].set(qtrsm(a[i:i+bb,i:i+bb,:,:], a[i:i+bb,i+bb:,:,:], p)) # update block B.
+        a = a.at[i+bb:,i+bb:,:,:].set((a[i+bb:,i+bb:,:,:] - jnp.tensordot(a[i+bb: ,i:i+bb,:,:], a[i:i+bb,i+bb:,:,:], axes = ([1,3],[0,2])).swapaxes(1,2)) % p) # update block D.
+
+    I = jnp.eye(a.shape[-1], dtype = jnp.int64)
+    l = jnp.where((R[:,None,None,None] - R[None,:,None,None]) > 0, a, 0)
+    l = jnp.where(R[:,None,None,None] == R[None,:,None,None], I, l)
+    u = jnp.where((R[:,None,None,None] - R[None,:,None,None]) <= 0, a, 0)
+    d = jnp.diagonal(a, offset = 0, axis1 = 0, axis2 = 1).swapaxes(0,2).swapaxes(1,2)
+    iperm = jnp.arange(len(perm))
+    iperm = iperm.at[perm].set(iperm)  
+    return l, u, d, iperm, parity
+
+def pinv(a, inv, b): # matrix inverse mod p.
+    
+    if len(a) == 1:
+        return inv[a[0,0]].reshape((1,1))
+
+    p = 1+inv[-1]
+    I = jnp.eye(len(a), dtype = DTYPE)
+    l, u, d, iperm = pgetrf(a, inv, b)
+    D = inv[d]
+    #LU = jax.vmap(ptrsm, in_axes=(0,0,None))(jnp.array( [l, (D*u%p).T] ), jnp.array( [I, D*I]),p)
+    L = ptrsm(l, I, p) # L = 1/l.
+    U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
+    return (U@L%p)[:,iperm]
+    
+
+
+@functools.partial(jax.jit, static_argnums = (2,3))
+def qinv(a, inv, p, b): # matrix inverse over a finite field.
+    
+    if len(a) == 1:
+        return pinv(a[0,0,:,:], inv, b)
+
+    p = 1+inv[-1]
+    R = jnp.arange(len(a))
+    In = jnp.eye(a.shape[-1],a.shape[-1], dtype = DTYPE)
+    Zn = jnp.zeros((a.shape[-1],a.shape[-1]), dtype = DTYPE)
+    I = jnp.where(R[:,None,None,None] - R[None,:,None,None] == 0, In, Zn)
+    l, u, d, iperm, parity = qgetrf(a, inv, b)
+
+    def dinv(a):
+        return pinv(a, inv, b)
+
+    @jax.jit
+    def matmul_vmap(aa,bb):
+        return pmatmul_vmap(aa,bb,p)
+
+    D = jax.vmap(dinv)(d)
+    #LU = jax.vmap(ptrsm, in_axes=(0,0,None))(jnp.array( [l, (D*u%p).T] ), jnp.array( [I, D*I]),p)
+    L = qtrsm(l, I, p) # L = 1/l.
+    U = qtrsm(jax.vmap(matmul_vmap)(D,u).swapaxes(0,1), jax.vmap(matmul_vmap)(D,I), p).swapaxes(0,1) # U = 1/u.      
+    return (jnp.tensordot(U, L, axes = ([1,3],[0,2])) % p)[:,iperm,:,:]
+
+def qdet(a, inv, p, b): # matrix determinant over a finite field.
+    l, u, d, iperm, parity = qgetrf(a, inv, b)
+    def matmul(a,b):
+        return pmatmul(a,b,p)
+    return jnp.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
+
 
 # END linear algebra
 # BEGIN field
@@ -107,7 +222,7 @@ class field:
         
         self.p = p
         self.n = n
-        self.q = p ** n 
+        self.q = p ** n if n*jnp.log2(p) < 63 else None
         self.CONWAY = CONWAY[p][n]
         self.RANGE = jnp.arange(n, dtype = DTYPE)
         self.ONE = jnp.ones(  n, dtype = DTYPE)
@@ -115,6 +230,9 @@ class field:
         self.BASIS = jnp.power( p * self.ONE, self.RANGE )
         self.X = self.x() # powers of the Conway matrix.
         self.INV = self.inv() # multiplicative inverses mod p.
+
+    def __repr__(self):
+        return f'field order  {self.q}.'
         
     def x(self):
 
@@ -172,9 +290,6 @@ class field:
             return jnp.concatenate([jnp.zeros(1, dtype = DTYPE), jax.lax.scan(inv_jit, ABC, A)[1]])
         
         return inv_scan()
-
-    def __repr__(self):
-        return f'field order  {self.q}.'
 
 # END field
 # BEGIN reshape operations
@@ -261,7 +376,10 @@ class array:
         self.shape = (1, 1, a.shape[0]) if len(a.shape) == 1 else (1, a.shape[0], a.shape[1]) if len(a.shape) == 2 else a.shape
         self.shape = (self.shape[-3], self.shape[-2]//self.field.n, self.shape[-1]//self.field.n) if lifted else self.shape
         self.lift = a if lifted else lift(a, self.field)
-        
+
+    def __repr__(self):
+        return f'array shape {self.shape}.\n' + repr(self.field) 
+
     def __neg__(self):
         return array(pneg(self.lift, self.field.p), dtype = self.field, lifted = True)
     
@@ -271,12 +389,10 @@ class array:
     def __sub__(self, a):
         return array(psub(self.lift, a.lift, self.field.p), dtype = self.field, lifted = True)
 
-    def __mul__(self, a):
-        
+    def __mul__(self, a):    
         if self.shape[-1]*self.shape[-2] == 1:      
             b = pmatmul_vmap(self.lift, ravel(a.lift, self.field), self.field.p).reshape(a.lift.shape)        
-            return array(b, dtype = self.field, lifted = True)
-        
+            return array(b, dtype = self.field, lifted = True)      
         if a.shape[-1]*a.shape[-2] == 1:         
             b = pmatmul_vmap(a.lift, ravel(self.lift, self.field), self.field.p).reshape(self.lift.shape)                     
             return array(b, dtype = self.field, lifted = True)
@@ -284,23 +400,27 @@ class array:
     def __matmul__(self, a):
         return array(pmatmul(self.lift, a.lift, self.field.p), dtype = self.field, lifted = True)
 
+    def proj(self):
+        return proj(self.lift, self.field)
+
+    def trace(self):  
+        T = jnp.trace(block(self.lift, self.field)) % self.field.p     
+        return array(T, dtype = self.field, lifted = True)
+
     def lu(self):
         return pgetrf(self.lift, self.field.INV, 32)
 
-    def inv(self):
-        
-        I = jnp.eye(len(self.lift), dtype = DTYPE)
-        l, u, d, iperm = pgetrf(self.lift, self.field.INV, 32)
-        D = self.field.INV[d]
-        #LU = jax.vmap(ptrsm, in_axes=(0,0,None))(jnp.array( [l, (D*u%p).T] ), jnp.array( [I, D*I]),p)
-        L = ptrsm(l, I, self.field.p) # L = 1/l.
-        U = ptrsm((D*u%self.field.p).T, D*I, self.field.p).T # U = 1/u.      
-        return array((U@L%self.field.p)[:,iperm], dtype = self.field, lifted = True)
+    def lu1(self):
+        return qgetrf(block(self.lift, self.field), self.field.INV, 32)
 
-    def det(self):       
-        
-        l, u, d, iperm = pgetrf(self.lift, self.field.INV, 32)      
-        return jax.lax.associative_scan(lambda a,b: a*b%self.field.p, d)[-1]
+    def inv(self):    
+        return array(pinv(self.lift, self.field.INV, 32), dtype = self.field, lifted = True)
+
+    def inv1(self):    
+        return qinv(block(self.lift, self.field), self.field.INV, self.field.p, 32)
+
+    def det(self):    
+        return array(qdet(block(self.lift, self.field), self.field.INV, self.field.p, 32), dtype = self.field, lifted = True)
     
     def inv_scan(self):   
         
@@ -332,17 +452,6 @@ class array:
         
         INV = inv_jit()       
         return array(INV, dtype = self.field, lifted = True)
-    
-    def proj(self):
-        return proj(self.lift, self.field)
-
-    def trace(self):
-        
-        T = jnp.trace(block(self.lift, self.field)) % self.field.p     
-        return array(T, dtype = self.field, lifted = True)
-
-    def __repr__(self):
-        return f'array shape {self.shape}.\n' + repr(self.field) 
 
 # END array
 # BEGIN random
@@ -354,8 +463,9 @@ def key(s = SEED):
 
 def random(shape, f, s = SEED):
     
-    shape = (1, 1, shape) if type(shape) == int else shape
-    a = jax.random.randint(key(s), shape, 0, f.q, dtype = DTYPE)
+    SHAPE = (1, 1, shape) if type(shape) == int else shape
+    MAX = f.q if f.n*jnp.log2(f.p) < 63 else jnp.iinfo(jnp.int64).max
+    a = jax.random.randint(key(s), SHAPE, 0, MAX, dtype = DTYPE)
     return array(a,f)
 
 # END random
