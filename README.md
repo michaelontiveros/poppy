@@ -31,8 +31,6 @@ like large matrix multiply very quickly `mod p`.
 
 | operation  | time (T4 GPU) |
 | ------------- | ------------- |
-| `poppy.array(a, F)`  | `188 us` |
-| `a.proj()`  | `130 us`  |
 | `a + b`  | `170 us`  |
 | `a.trace()` | `329 us` |
 | `a * c`  | `1.4 ms`  |
