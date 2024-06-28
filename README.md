@@ -16,9 +16,8 @@
 
 
 # Construction
-The homomorphism from `F` to `M_n( F_p )`, sending `f mod y` to `f(X)`, is injective and extends linearly to a faithful representation of `M_d( F )` in `M_nd( F_p )`, reducing linear algebra over finite fields
-to linear algebra `mod p`. GPU optimized machine learning libraries like `jax` do linear algebra operations
-like large matrix multiply very quickly `mod p`.
+We represent finite field elements `f mod y` by `n x n` matrices `f(X) mod p`. This representation is faithful. It extends linearly to a faithful `mod p` representation 
+of the matrix algebra `M_d( F )`. Matrices `mod p` are `jax.numpy.int64` arrays of nonnegative integers less than `p`. We use the `jax.numpy.mod()` function to reduce `mod p`.
 
 # Performance
 
