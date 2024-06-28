@@ -102,8 +102,10 @@ def qgetrf2(aperm, inv): # sequential lu decomposition over a finite field.
     R = jnp.arange(min(len(I),len(J)))
   
     def f(ap, i):
-        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (n,). parity has shape (1,).
-        j = jnp.argmax(jnp.where(I >= i, a[:,i,0,0], -1)) # search column i for j.
+        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (r,). parity has shape (1,).
+        #ai = a[:,i,0,0]
+        ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
+        j = jnp.argmax(jnp.where(I >= i, ai, -1)) # search column i for j.
         perm = perm.at[[i,j],].set(perm[[j,i],]) # swap rows i and j.
         a = a.at[[i,j],:,:,:].set( a[[j,i],:,:,:] ) # swap rows i and j.
         a = a.at[:,i,:,:].set( jnp.where( I[:,None,None] > i, (jnp.tensordot( a[:,i,:,:], pinv(a[i,i,:,:], inv, 32), axes = (2,0))) % p, a[:,i,:,:] ) )  # scale column i.
