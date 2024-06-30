@@ -1,5 +1,5 @@
 # BEGIN POPPY
-# BEGIN initialize
+# BEGIN INIT
 
 import jax
 import jax.numpy as jnp
@@ -16,8 +16,8 @@ CONWAY = conway_polynomials.database()
 # The pseudo random number generator has a default seed.
 SEED = 0 
 
-# END initialize
-# BEGIN modular arithmetic
+# END INIT
+# BEGIN MODULAR ARITHMETIC
 
 @functools.partial(jax.jit, static_argnums = 1)
 def pneg(a,p):
@@ -41,8 +41,8 @@ def pmatmul(a, b, p):
 
 pmatmul_vmap = jax.vmap(pmatmul, in_axes = (None, 0, None))
 
-# END modular arithmetic
-# BEGIN linear algebra
+# END MODULAR ARITHMETIC
+# BEGIN LINEAR ALGEBRA
 
 @jax.jit
 def ptrsm(a, b, p): # triangular solve mod p.
@@ -179,8 +179,6 @@ def pinv(a, inv, b): # matrix inverse mod p.
     L = ptrsm(l, I, p) # L = 1/l.
     U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
     return (U@L%p)[:,iperm]
-    
-
 
 @functools.partial(jax.jit, static_argnums = (2,3))
 def qinv(a, inv, p, b): # matrix inverse over a finite field.
@@ -213,9 +211,8 @@ def qdet(a, inv, p, b): # matrix determinant over a finite field.
         return pmatmul(a,b,p)
     return jnp.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
 
-
-# END linear algebra
-# BEGIN field
+# END LINEAR ALGEBRA
+# BEGIN FIELD
 
 class field:
     def __init__(self, p, n):    
@@ -230,6 +227,7 @@ class field:
         self.BASIS = jnp.power( p * self.ONE, self.RANGE )
         self.X = self.x() # powers of the Conway matrix.
         self.INV = self.inv() # multiplicative inverses mod p.
+        self.LEG = self.leg() # legendre symbol mod p.
 
     def __repr__(self):
         return f'field order  {self.q}.'
@@ -291,8 +289,12 @@ class field:
         
         return inv_scan()
 
-# END field
-# BEGIN reshape operations
+    def leg(self):
+        R = jnp.arange(self.p)
+        return (-jnp.ones(self.p, dtype = jnp.int32)).at[(R*R) % self.p].set(1).at[0].set(0)
+
+# END FIELD
+# BEGIN RESHAPE OPERATIONS
 
 @functools.partial(jax.jit, static_argnums = 1)
 def block(m,f): 
@@ -310,8 +312,8 @@ def unravel(i, f, s):
     n = f.n    
     return i.reshape(s[:-2] + (s[-2]//n, s[-1]//n, n, n)).swapaxes(-2, -3).reshape(s)
 
-# END reshape operations
-# BEGIN en/de-coding operations
+# END RESHAPE OPERATIONS
+# BEGIN EN/DE-CODING OPERATIONS
 
 @functools.partial(jax.jit, static_argnums = 1)
 def i2v(i,f):
@@ -347,7 +349,8 @@ m2i_vmap = jax.vmap(m2i, in_axes = (0, None))
 @functools.partial(jax.jit, static_argnums = 1)
 def lift(i,f):  
     m = i2m_vmap(i.ravel(), f)
-    s = i.shape
+    s = (1, 1, i.shape) if len(i.shape) == 1 else (1, i.shape[0], i.shape[1]) if len(i.shape) == 2 else i.shape
+    #s = i.shape
     n = f.n 
     return m.reshape(s + (n,n)).swapaxes(-2, -3).reshape(s[:-2] + (s[-2]*n, s[-1]*n))
 
@@ -357,8 +360,8 @@ def proj(m,f):
     s = m.shape[:-2] + (m.shape[-2]//f.n, m.shape[-1]//f.n)  
     return i.reshape(s)
 
-# END en/de-coding operations
-# BEGIN array
+# END EN/DE-CODING OPERATIONS
+# BEGIN ARRAY
 
 class array:
     def __init__(self, a, dtype = field(2,1), lifted = False):
@@ -448,8 +451,8 @@ class array:
         INV = inv_jit()       
         return array(INV, dtype = self.field, lifted = True)
 
-# END array
-# BEGIN random
+# END ARRAY
+# BEGIN RANDOM
 
 SEED = 0
 
@@ -462,5 +465,235 @@ def random(shape, f, s = SEED):
     a = jax.random.randint(key(s), SHAPE, 0, MAX, dtype = DTYPE)
     return array(a,f)
 
-# END random
+# END RANDOM
+# BEGIN 2D OBJECTS
+
+@functools.partial(jax.jit, static_argnums = 0)
+def v2(q):
+  R1 = jnp.arange(q)
+  R2 = jnp.array( [ jnp.tile(R1,len(R1)), jnp.repeat(R1,len(R1))]).T
+  return R2 # all 2d vectors with nonnegative integer entries less than q.
+
+@functools.partial(jax.jit, static_argnums = 0)
+def m2(q):
+  R1 = jnp.arange(q)
+  R2 = jnp.array( [ jnp.tile(R1,len(R1)), jnp.repeat(R1,len(R1))]).T
+  R3 = jnp.array( [ jnp.tile(R2.T,len(R2)).T, jnp.repeat(R2.T,len(R2)).reshape(2,-1).T]).swapaxes(0,1).reshape(-1,2,2)
+  return R3 # all 2x2 matrices with nonnegative integer entries less than q.
+
+@functools.partial(jax.jit, static_argnums = 1)
+def encode(a,q): # q < 256.
+  return jnp.sum(a.ravel() * q**jnp.arange(4), dtype = jnp.uint32)
+
+@functools.partial(jax.jit, static_argnums = 1)
+def decode(x,q): # q < 256.
+    d = x//q**3
+    c = (x-d*q**3)//q**2
+    b = (x-d*q**3-c*q**2)//q
+    a = (x-d*q**3-c*q**2-b*q)
+    return jnp.array([[a,b],[c,d]], dtype = jnp.int64)
+
+def gl2(f):
+  assert f.q < 256
+
+  @jax.jit
+  def det(x):
+    a = lift(decode(x,f.q),f)
+    return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+
+  m2c = jnp.arange(f.q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+  i = jnp.nonzero(jnp.where(m2d > 0, m2c, 0))[0]
+  gl2c = m2c[i]
+  id = f.q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return gl2c, id
+
+def sl2(f):
+  assert f.q < 256
+
+  @jax.jit
+  def det(x):
+    a = lift(decode(x,f.q),f)
+    return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+
+  m2c = jnp.arange(f.q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+  i = jnp.nonzero(jnp.where(m2d == 1, m2c, 0))[0]
+  sl2c = m2c[i]
+  id = f.q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return sl2c, id
+
+def pgl2(f):
+  assert f.q < 256
+
+  @jax.jit
+  def det(x):
+    a = lift(decode(x,f.q),f)
+    return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+
+  @jax.jit
+  def normed(x):
+    A = lift(decode(x,f.q),f)
+    a, b = proj(A[0,0],f).ravel(), proj(A[0,1],f).ravel()
+    return (a == 1) | ((a == 0) & (b == 1))
+
+  m2c = jnp.arange(f.q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+  m2n = jax.vmap(normed)(m2c.reshape((-1,1,1))).squeeze()
+  i = jnp.nonzero(jnp.where((m2d > 0) & m2n, m2c, 0))[0]
+  pgl2c = m2c[i]
+  id = f.q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return pgl2c, id
+
+def pgl2mod(q):
+  assert q < 256
+
+  @jax.jit
+  def det(x):
+    a = decode(x,q)
+    return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
+
+  @jax.jit
+  def normed(x):
+    A = decode(x,q)
+    a, b = A[0,0], A[0,1]
+    return (a == 1) | ((a == 0) & (b == 1))
+
+  m2c = jnp.arange(q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c)
+  m2n = jax.vmap(normed)(m2c)
+  i = jnp.nonzero(jnp.where((m2d > 0) & m2n, m2c, 0))[0]
+  pgl2c = m2c[i]
+  id = q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return pgl2c, id
+
+def psl2(f):
+  assert f.q < 256
+
+  @jax.jit
+  def det(x):
+    a = lift(decode(x,f.q),f)
+    return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+
+  @jax.jit
+  def normed(x):
+    A = lift(decode(x,f.q),f)
+    a, b = proj(A[0,0],f).ravel(), proj(A[0,1],f).ravel()
+    return (a < f.q//2) | ((a == 0) & (b < f.q//2))
+
+  m2c = jnp.arange(f.q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+  m2n = jax.vmap(normed)(m2c.reshape((-1,1,1))).squeeze()
+  i = jnp.nonzero(jnp.where((m2d == 1) & m2n, m2c, 0))[0]
+  psl2c = m2c[i]
+  id = f.q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return psl2c, id
+
+def psl2mod(q):
+  assert q < 256
+
+  @jax.jit
+  def det(x):
+    a = decode(x,q)
+    return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
+
+  @jax.jit
+  def normed(x):
+    A = decode(x,q)
+    a, b = A[0,0], A[0,1]
+    return (a < q//2) | ((a == 0) & (b < q//2))
+
+  m2c = jnp.arange(q**4, dtype = jnp.uint32)
+  m2d = jax.vmap(det)(m2c)
+  m2n = jax.vmap(normed)(m2c)
+  i = jnp.nonzero(jnp.where((m2d == 1) & m2n, m2c, 0))[0]
+  psl2c = m2c[i]
+  id = q**4*jnp.ones(len(m2c), dtype = jnp.uint32)
+  id = id.at[i].set(jnp.arange(len(i), dtype = jnp.uint32))
+  return psl2c, id
+
+@functools.partial(jax.jit, static_argnums = 0)
+def pS1(p):
+
+  def norm(a):
+    return a[0]*a[0]+a[1]*a[1]
+
+  R = v2(p)
+  N = jax.vmap(norm)(R)%p
+  M = jnp.where(N == (p-1), N, -1)
+  return R[jnp.argmax(M)] # a point on the circle x*x + y*y = (p-1) mod p.
+
+@functools.partial(jax.jit, static_argnums = (0,1))
+def S3(p,r):
+
+  def norm(a):
+    return a[0,0]*a[0,0]+a[0,1]*a[0,1]+a[1,0]*a[1,0]+a[1,1]*a[1,1]
+    
+  R = m2(2*r)-r
+  N = jax.vmap(norm)(R)
+  return R, jnp.where(N == p,N,-1) # the integer three sphere x*x + y*y + z*z + t*t = p.
+
+def S(p,q):
+  xy = pS1(q)
+  x, y = xy[0], xy[1]
+
+  def f(s):
+    a, b, c, d = s[0,0], s[0,1], s[1,0], s[1,1]
+    return jnp.array([[a+b*x+d*y, c+d*x-b*y],[-c+d*x-b*y, a-b*x-d*y]], dtype = jnp.int64)%q
+
+  R, i = S3(p,1+int(jnp.sqrt(p)))
+  i = jnp.where(i >= 0)
+  R0 = R[i,0,0]
+  R1 = R[i,0,1]
+  Sp = R[i[0][jnp.where((R0 > 0) & ((R0%2)==1))[1]]] if (p % 4) == 1 else R[i[0][jnp.where((R0 >= 0) & ((R0%2) == 0) & ((R0 > 0) | (R1 > 0)))[1]]]
+  return jax.vmap(f)(Sp) # generate the group PSL2q if p is a quadratic residue mod q, else PGL2q.
+
+def lps(p,q): # the Lubotzky-Phillips-Sarnak expander graph is a (p+1)-regular Cayley graph for the group PSL2q or PGL2q.
+  assert (p in CONWAY) & (q in CONWAY) & (p != q) & (p > 2) & (q > 2) & (q*q > 4*p)
+  f = field(q,1)
+
+  @jax.jit
+  def normpgl(A):
+    a, b = A[0,0], A[0,1]
+    sa = jnp.sign(a)
+    c = f.INV[sa*a + (1-sa)*b]
+    return c*A%q
+
+  @jax.jit
+  def normpsl(A):
+    a, b = A[0,0], A[0,1]
+    sa, sqa, sqb = jnp.sign(a), jnp.sign(q//2 - a), jnp.sign(q//2 - b)
+    s = sa*sqa + (1-sa)*sqb
+    return s*A%q
+
+  norm = normpsl if f.LEG[p] == 1 else normpgl
+  V = jax.vmap(norm)(S(p,q))
+
+  @jax.jit
+  def enc(a):
+    return jnp.sum(a.ravel() * q**jnp.arange(4), dtype = jnp.uint32)
+
+  @jax.jit
+  def dec(x):
+    d = x//q**3
+    c = (x-d*q**3)//q**2
+    b = (x-d*q**3-c*q**2)//q
+    a = (x-d*q**3-c*q**2-b*q)
+    return jnp.array([[a,b],[c,d]], dtype = jnp.int64)
+
+  @jax.jit 
+  def mul(x):
+    a = jax.vmap(norm)(jnp.tensordot(dec(x), V, axes = (1,1)).swapaxes(0,1)%q)
+    return jax.vmap(enc)(a)
+
+  G, id = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
+  graph = jax.vmap(mul)(G)
+  return graph, id
+
+# END 2D OBJECTS
 # END POPPY
