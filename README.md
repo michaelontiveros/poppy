@@ -17,7 +17,7 @@ POPPY is a python package for linear algebra over finite fields on the GPU. It h
 
 # Representation
 POPPY represents a finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. It extends linearly to a faithful `mod p` representation 
-of the matrix algebra `M_d( F )`. A matrix `mod p` is a `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces matrices `mod p`.
+of the matrix algebra `M_d( F )`. A matrix `mod p` is a `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer matrices `mod p`.
 
 # Speed
 
