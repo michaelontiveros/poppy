@@ -1,5 +1,5 @@
 # Introduction
-`poppy` is a python package for linear algebra over finite fields on the GPU. It has two classes: `field` and `array`. It is written in `jax`.
+POPPY is a python package for linear algebra over finite fields on the GPU. It has two classes: `field` and `array`. It is written in JAX.
 
 
 
