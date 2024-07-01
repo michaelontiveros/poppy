@@ -1,5 +1,5 @@
 # Introduction
-POPPY is a python package for linear algebra over finite fields on the GPU. It has two classes: `field` and `array`. It is written in JAX.
+POPPY is a python package for linear algebra over finite fields on the GPU. It has two classes: `field` and `array`. It is written in [JAX](https://github.com/google/jax).
 
 
 
@@ -17,9 +17,9 @@ POPPY is a python package for linear algebra over finite fields on the GPU. It h
 
 # Representation
 POPPY represents a finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. It extends linearly to a faithful `mod p` representation 
-of the matrix algebra `M_d( F )`. Matrices `mod p` are `jax.numpy.int64` arrays of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces arrays `mod p`.
+of the matrix algebra `M_d( F )`. A matrix `mod p` is a `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces matrices `mod p`.
 
-# Performance
+# Speed
 
 `q = 12421^3`.
 
