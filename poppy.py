@@ -201,7 +201,7 @@ class field:
         self.I = jax.numpy.eye(   n, dtype = DTYPE)
         self.BASIS = jax.numpy.power( p * self.ONE, self.RANGE )
         self.X = self.x()     # Powers of the Conway matrix.
-        self.INV = self.inv() # Multiplicative inverses mod p.
+        self.INV = self.inv() # Multiplicative inverse mod p.
         self.LEG = self.leg() # Legendre symbol mod p.
 
     def __repr__(self):
@@ -683,6 +683,7 @@ def S(p,q):
 def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cayley graph for the group PSL2q or PGL2q.
     assert (p in CONWAY) & (q in CONWAY) & (p != q) & (p > 2) & (q > 2) & (q*q > 4*p)
     f = field(q,1)
+    l = f.LEG[p%q]
 
     @jax.jit
     def normpgl(A):
@@ -698,7 +699,10 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
         s = sa*sqa + (1-sa)*sqb
         return s*A%q
 
-    norm = normpsl if f.LEG[p] == 1 else normpgl
+    @jax.jit
+    def norm(A):
+        return jax.lax.cond(l==1, normpsl, normpgl, A)
+    #norm = normpsl if f.LEG[p%q] == 1 else normpgl
     V = jax.vmap(norm)(S(p,q))
 
     @jax.jit
@@ -718,9 +722,9 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
         a = jax.vmap(norm)(jax.numpy.tensordot(dec(x), V, axes = (1,1)).swapaxes(0,1)%q)
         return jax.vmap(enc)(a)
 
-    G, idx = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
+    G, i = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
     graph = jax.vmap(mul)(G)
-    return graph, idx
+    return graph, i
 
 # END EXPANDER
 # END POPPY
