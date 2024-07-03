@@ -292,11 +292,11 @@ def unravel(i,f,s):
 
 @functools.partial(jax.jit, static_argnums = 1)
 def i2v(i,f):
-    return jax.numpy.floor_divide((i % f.p) * f.ONE, f.BASIS) % f.p
+    return jax.numpy.floor_divide(i*f.ONE, f.BASIS) % f.p
 
 @functools.partial(jax.jit, static_argnums = 1)
 def v2i(v,f):
-    return jax.numpy.sum(v * f.BASIS, dtype = DTYPE)
+    return jax.numpy.sum(v*f.BASIS, dtype = DTYPE)
 
 @functools.partial(jax.jit, static_argnums = 1)
 def v2m(v,f):
@@ -314,10 +314,10 @@ def i2m(i,f):
 def m2i(m,f):
     return v2i(m[0], f)
 
-i2v_vmap = jax.vmap(i2v, in_axes = (0, None))
-v2i_vmap = jax.vmap(v2i, in_axes = (0, None))
-v2m_vmap = jax.vmap(v2m, in_axes = (0, None))
-m2v_vmap = jax.vmap(m2v, in_axes = (0, None))
+#i2v_vmap = jax.vmap(i2v, in_axes = (0, None))
+#v2i_vmap = jax.vmap(v2i, in_axes = (0, None))
+#v2m_vmap = jax.vmap(v2m, in_axes = (0, None))
+#m2v_vmap = jax.vmap(m2v, in_axes = (0, None))
 i2m_vmap = jax.vmap(i2m, in_axes = (0, None))
 m2i_vmap = jax.vmap(m2i, in_axes = (0, None))
 
@@ -698,7 +698,7 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
     @jax.jit
     def normpsl(A):
         a, b = A[0,0], A[0,1]
-        sa, sqa, sqb = jax.numpy.sign(a), jax.numpy.sign(q//2 - a), jax.numpy.sign(q//2 - b)
+        sa, sqa, sqb = jax.numpy.sign(a), jax.numpy.sign((q//2)-a), jax.numpy.sign((q//2)-b)
         s = sa*sqa + (1-sa)*sqb
         return s*A%q
 
