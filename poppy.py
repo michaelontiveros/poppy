@@ -314,10 +314,6 @@ def i2m(i,f):
 def m2i(m,f):
     return v2i(m[0], f)
 
-#i2v_vmap = jax.vmap(i2v, in_axes = (0, None))
-#v2i_vmap = jax.vmap(v2i, in_axes = (0, None))
-#v2m_vmap = jax.vmap(v2m, in_axes = (0, None))
-#m2v_vmap = jax.vmap(m2v, in_axes = (0, None))
 i2m_vmap = jax.vmap(i2m, in_axes = (0, None))
 m2i_vmap = jax.vmap(m2i, in_axes = (0, None))
 
@@ -522,59 +518,59 @@ def decode(x,q): # x is nonnegative and q < 256.
 # BEGIN GROUPS
 
 def gl2(f):
-    assert f.q < 256
 
     @jax.jit
     def det(x):
-        a = lift(decode(x,f.q),f)
-        return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+        a = block(lift(decode(x,f.q),f),f)
+        return proj((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
 
+    assert f.q < 256
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
-    m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+    m2d = jax.vmap(det)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where(m2d > 0, m2c, 0))[0]
     gl2c = m2c[i]
-    id = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return gl2c, id
+    idx = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return gl2c, idx
 
 def sl2(f):
-    assert f.q < 256
 
     @jax.jit
     def det(x):
-        a = lift(decode(x,f.q),f)
-        return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+        a = block(lift(decode(x,f.q),f),f)
+        return proj((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
 
+    assert f.q < 256
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
-    m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
+    m2d = jax.vmap(det)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where(m2d == 1, m2c, 0))[0]
     sl2c = m2c[i]
-    id = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return sl2c, id
+    idx = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return sl2c, idx
 
 def pgl2(f):
     assert f.q < 256
 
     @jax.jit
     def det(x):
-        a = lift(decode(x,f.q),f)
-        return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+        a = block(lift(decode(x,f.q),f),f)
+        return proj((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
 
     @jax.jit
     def normed(x):
-        A = lift(decode(x,f.q),f)
-        a, b = proj(A[0,0],f).ravel(), proj(A[0,1],f).ravel()
+        A = block(lift(decode(x,f.q),f),f)
+        a, b = proj(A[:,0,0,:,:],f).ravel(), proj(A[:,0,1,:,:],f).ravel()
         return (a == 1) | ((a == 0) & (b == 1))
 
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
-    m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
-    m2n = jax.vmap(normed)(m2c.reshape((-1,1,1))).squeeze()
+    m2d = jax.vmap(det)(m2c).squeeze()
+    m2n = jax.vmap(normed)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where((m2d > 0) & m2n, m2c, 0))[0]
     pgl2c = m2c[i]
-    id = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return pgl2c, id
+    idx = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return pgl2c, idx
 
 def pgl2mod(q):
     assert q < 256
@@ -595,32 +591,32 @@ def pgl2mod(q):
     m2n = jax.vmap(normed)(m2c)
     i = jax.numpy.nonzero(jax.numpy.where((m2d > 0) & m2n, m2c, 0))[0]
     pgl2c = m2c[i]
-    id = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return pgl2c, id
+    idx = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return pgl2c, idx
 
 def psl2(f):
     assert f.q < 256
 
     @jax.jit
     def det(x):
-        a = lift(decode(x,f.q),f)
-        return proj((a[0,0]@a[1,1]-a[0,1]@a[1,0])%f.p,f).ravel()
+        a = block(lift(decode(x,f.q),f),f)
+        return proj((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
 
     @jax.jit
     def normed(x):
-        A = lift(decode(x,f.q),f)
-        a, b = proj(A[0,0],f).ravel(), proj(A[0,1],f).ravel()
+        A = block(lift(decode(x,f.q),f),f)
+        a, b = proj(A[:,0,0,:,:],f).ravel(), proj(A[:,0,1,:,:],f).ravel()
         return (a < f.q//2) | ((a == 0) & (b < f.q//2))
 
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
-    m2d = jax.vmap(det)(m2c.reshape((-1,1,1))).squeeze()
-    m2n = jax.vmap(normed)(m2c.reshape((-1,1,1))).squeeze()
+    m2d = jax.vmap(det)(m2c).squeeze()
+    m2n = jax.vmap(normed)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where((m2d == 1) & m2n, m2c, 0))[0]
     psl2c = m2c[i]
-    id = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return psl2c, id
+    idx = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return psl2c, idx
 
 def psl2mod(q):
     assert q < 256
@@ -641,9 +637,9 @@ def psl2mod(q):
     m2n = jax.vmap(normed)(m2c)
     i = jax.numpy.nonzero(jax.numpy.where((m2d == 1) & m2n, m2c, 0))[0]
     psl2c = m2c[i]
-    id = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
-    id = id.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return psl2c, id
+    idx = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return psl2c, idx
 
 # END GROUPS
 # BEGIN EXPANDER
@@ -722,9 +718,9 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
         a = jax.vmap(norm)(jax.numpy.tensordot(dec(x), V, axes = (1,1)).swapaxes(0,1)%q)
         return jax.vmap(enc)(a)
 
-    G, id = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
+    G, idx = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
     graph = jax.vmap(mul)(G)
-    return graph, id
+    return graph, idx
 
 # END EXPANDER
 # END POPPY
