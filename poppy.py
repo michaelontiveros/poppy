@@ -205,7 +205,7 @@ class field:
         self.LEG = self.leg() # Legendre symbol mod p.
 
     def __repr__(self):
-        return f'field order  {self.q}.'
+        return f'the field of order {self.q}.'
         
     def x(self):
 
@@ -348,7 +348,7 @@ class array:
         self.REP = a if lifted else lift(a, self.field)
 
     def __repr__(self):
-        return f'array shape {self.shape}.\n' + repr(self.field) 
+        return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
 
     def __neg__(self):
         return array(pneg(self.REP, self.field.p), dtype = self.field, lifted = True)
