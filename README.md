@@ -22,10 +22,10 @@ of the matrix algebra `M_d( F )`. A matrix `mod p` is a `jax.numpy.int64` array 
 # Performance
 
 `q = 12421^3`.
-
-`c` is a random number in `F`.
  
 `a`, `b` are random `222 x 222` matrices over `F`.
+
+`c` is a random number in `F`.
 
 | operation  | time (T4 GPU) |
 | ------------- | ------------- |
