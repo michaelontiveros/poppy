@@ -338,6 +338,10 @@ def proj(a,f):
 class array:
     def __init__(self, a, dtype = field(2,1), lifted = False):
     
+        if type(a) == int:
+            a = jax.numpy.array([a], dtype = DTYPE)
+        elif type(a) == list:
+            a = jax.numpy.array(a, dtype = DTYPE)
         if len(a.shape) > 3:
             print('ERROR: poppy arrays are three dimensional.')
             return
@@ -681,7 +685,7 @@ def S(p,q):
     return jax.vmap(f)(Sp) # p+1 generators for the group PSL2q, if p is a quadratic residue mod q, else PGL2q.
 
 def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cayley graph for the group PSL2q or PGL2q.
-    assert (p in CONWAY) & (q in CONWAY) & (p != q) & (p > 2) & (q > 2) & (q*q > 4*p)
+    assert (p in CONWAY) and (q in CONWAY) and (p != q) and (p > 2) and (q > 2) and (q*q > 4*p)
     f = field(q,1)
     l = f.LEG[p%q]
 
