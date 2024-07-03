@@ -601,6 +601,8 @@ def pgl2mod(q):
 
 def psl2(f):
     assert f.q < 256
+    if f.p == 2:
+        return pgl2(f)
 
     @jax.jit
     def det(x):
@@ -611,7 +613,7 @@ def psl2(f):
     def normed(x):
         A = block(lift(decode(x,f.q),f),f)
         a, b = proj(A[:,0,0,:,:],f).ravel(), proj(A[:,0,1,:,:],f).ravel()
-        return (a < f.q//2) | ((a == 0) & (b < f.q//2))
+        return ((a != 0) & (a < f.q/2)) | ((a == 0) & (b < f.q/2))
 
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c).squeeze()
@@ -624,6 +626,8 @@ def psl2(f):
 
 def psl2mod(q):
     assert q < 256
+    if q == 2:
+        return pgl2mod(q)
 
     @jax.jit
     def det(x):
@@ -634,7 +638,7 @@ def psl2mod(q):
     def normed(x):
         A = decode(x,q)
         a, b = A[0,0], A[0,1]
-        return (a < q//2) | ((a == 0) & (b < q//2))
+        return ((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2))
 
     m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c)
