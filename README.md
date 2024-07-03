@@ -10,7 +10,7 @@ POPPY is a python package for linear algebra over finite fields on the GPU. It h
 
 `F = F_q` is the finite field.
 
-`M_d( F )` is the ring of `d x d` matrices over `F`.
+`M_d( F )` is the associative algebra of `d x d` matrices over `F`.
 
 `X = X_y` is the `n x n` companion matrix.
 
