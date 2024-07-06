@@ -43,9 +43,7 @@ def pmatmul(a,b,p):
 
 @jax.jit
 def ptrsm(a,b,p): # Triangular solve mod p.
-    
     R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c).
-
     def ptrsm_vmap(bb): # bb is the matrix b.
         def ptrsm_scan(bc): # bc is a column of bb.
             def f(x,j):
@@ -53,15 +51,12 @@ def ptrsm(a,b,p): # Triangular solve mod p.
                 return x, x[j]  
             return jax.lax.scan(f, jax.numpy.where(R == 0, bc[0], 0), R[1:])[0] # scan the rows of a.
         return jax.vmap(ptrsm_scan)(bb.T).T  # vmap the columns of b.
-
     return ptrsm_vmap(b)
 
 @jax.jit
 def qtrsm(a,b,p): # Triangular solve over a finite field.
-    
     R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c,n,n).
     ZERO = jax.numpy.zeros((b.shape[-1],b.shape[-1]), dtype = DTYPE) # b has shape (c,d,n,n).
-
     def ptrsm_vmap(bb): # bb is the array b.
         def ptrsm_scan(bc): # bc has shape (c,n,n). it is a column of bb.
             def f(x,j):
@@ -69,35 +64,29 @@ def qtrsm(a,b,p): # Triangular solve over a finite field.
                 return x, x[j]  
             return jax.lax.scan( f, jax.numpy.where( R[:,None,None] == 0, bc[0], ZERO ), R[1:] )[0] # scan the rows of a.
         return jax.vmap(ptrsm_scan)(bb.swapaxes(0,1)).swapaxes(0,1)  # vmap the columns of b.
-
     return ptrsm_vmap(b)
 
 @jax.jit
 def pgetrf2(aperm, inv): # Sequential lu decomposition mod p.
-    
     p = 1+inv[-1] # p is prime.
     I = jax.numpy.arange(aperm.shape[0])
     J = jax.numpy.arange(aperm.shape[1]-1)
     R = jax.numpy.arange(min(len(I),len(J)))
-  
     def f(ap, i):
         j = jax.numpy.argmax(jax.numpy.where(I >= i, ap[:,i], -1)) # Search column i for j.
         ap = ap.at[[i,j],:].set( ap[[j,i],:] ) # Swap rows i and j.
         ap = ap.at[:,i].set( jax.numpy.where( I > i, (ap[:,i] * inv[ ap[i,i] ]) % p, ap[:,i] ) )  # Scale column i.
         ap = ap.at[:,:-1].set((ap[:,:-1] - jax.numpy.where((I[:,None] > i) & (J[None,:] > i), jax.numpy.outer(ap[:,i], ap[i,:-1]), 0)) % p) # Update block D.     
         return ap, i
-
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @jax.jit
 def qgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
-    
     a, perm, parity = aperm
     p = 1+inv[-1] # p is prime.
     I = jax.numpy.arange(a.shape[0])
     J = jax.numpy.arange(a.shape[1])
     R = jax.numpy.arange(min(len(I),len(J)))
-  
     def f(ap, i):
         a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (r,). parity has shape (1,).
         ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
@@ -108,16 +97,13 @@ def qgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
         a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
         parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
         return (a, perm, parity), j
-
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def pgetrf(a, inv, b): # Blocked lu decompposition mod p.
-    
     p = 1+inv[-1]
     m = min(a.shape)
     perm = jax.numpy.arange(len(a))
-  
     for i in range(0, m, b):
         bb = min(m-i, b)
         ap = pgetrf2(jax.numpy.hstack([a[i:, i:i+bb], jax.numpy.arange(i,len(a)).reshape((-1,1))]), inv)
@@ -138,14 +124,12 @@ pgetrf_vmap = jax.vmap(pgetrf, in_axes = (0, None, None))
 
 @functools.partial(jax.jit, static_argnums = 2)
 def qgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
-    
     p = 1+inv[-1]
     r,c = a.shape[0], a.shape[1]
     m = min(r,c)
     R = jax.numpy.arange(r)
     perm = jax.numpy.arange(r)
     parity = jax.numpy.zeros(1, dtype = DTYPE)
-  
     for i in range(0, m, b):
         bb = min(m-i, b)
         ai, permi, pari = qgetrf2((a[i:,i:i+bb,:,:], R[i:], 0), inv) # a has shape (r-i,bb,n,n). pi has shape (r-i,)
@@ -155,7 +139,6 @@ def qgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
         a = a.at[i:,i:i+bb,:,:].set(ai)  # Update block C.
         a = a.at[i:i+bb,i+bb:,:,:].set(qtrsm(a[i:i+bb,i:i+bb,:,:], a[i:i+bb,i+bb:,:,:], p)) # Update block B.
         a = a.at[i+bb:,i+bb:,:,:].set((a[i+bb:,i+bb:,:,:] - jax.numpy.tensordot(a[i+bb: ,i:i+bb,:,:], a[i:i+bb,i+bb:,:,:], axes = ([1,3],[0,2])).swapaxes(1,2)) % p) # Update block D.
-
     I = jax.numpy.eye(a.shape[-1], dtype = DTYPE)
     l = jax.numpy.where((R[:,None,None,None] - R[None,:,None,None]) > 0, a, 0)
     l = jax.numpy.where(R[:,None,None,None] == R[None,:,None,None], I, l)
@@ -168,13 +151,10 @@ def qgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
 qgetrf_vmap = jax.vmap(qgetrf, in_axes = (0, None, None))
 
 def pinv(a, inv, b): # Matrix inverse mod p.
-    
     if len(a) == 1:
         return inv[a[0,0]].reshape((1,1))
-
     p = 1+inv[-1]
     I = jax.numpy.eye(len(a), dtype = DTYPE)
-   
     l, u, d, iperm = pgetrf(a, inv, b)
     D = inv[d]
     L = ptrsm(l, I, p) # L = 1/l.
@@ -182,20 +162,16 @@ def pinv(a, inv, b): # Matrix inverse mod p.
     return (U@L%p)[:,iperm]
 
 def pinv_vmap(a, inv, b): # Matrix inverse mod p.
-    
     if a.shape[1] == 1:
         return inv[a[:,0,0]].reshape((a.shape[0],1,1))
-
     p = 1+inv[-1]
     I = jax.numpy.eye(a.shape[1], dtype = DTYPE)
-   
     def inverse(A):
         l, u, d, iperm = pgetrf(A, inv, b)
         D = inv[d]
         L = ptrsm(l, I, p) # L = 1/l.
         U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
         return (U@L%p)[:,iperm]
-    
     return jax.vmap(inverse)(a)
 
 def qdet(a, inv, p, b): # Matrix determinant over a finite field.
@@ -217,7 +193,6 @@ def qdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
 
 class field:
     def __init__(self, p, n):    
-        
         self.p = p
         self.n = n
         self.q = p ** n if n*jax.numpy.log2(p) < 63 else None
@@ -238,7 +213,6 @@ class field:
         @jax.jit
         def id(a,i):
             return a
-
         stack = jax.vmap(id, (None,0))
         
         @jax.jit
@@ -251,16 +225,12 @@ class field:
         
         @jax.jit
         def x_scan():
-            
             # V is the vector of subleading coefficients of the Conway polynomial.
             V = jax.numpy.array(self.CONWAY[:-1], dtype = DTYPE)
-            
             # M is the companion matrix of the Conway polynomial.
             M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(self.I[1:,1:]).at[-1].set(neg(V))
-            
             # X is the array of powers of M.
             X = jax.lax.associative_scan(matmul, stack(M,self.RANGE).at[0].set(self.I))
-            
             return X
 
         return x_scan()
@@ -273,14 +243,12 @@ class field:
         
         @functools.partial(jax.jit, static_argnums = 1)
         def inv_jit(ABC, i):
-            
             C = mul(ABC[i-2, 0], ABC[i-2, 2])
             ABC = ABC.at[i-1, 2].set(C)   
             return ABC, mul(ABC[i-1, 1], C)
         
         @jax.jit
         def inv_scan():    
-            
             A = jax.numpy.arange(1, self.p, dtype = DTYPE)
             AA = jax.numpy.concatenate([self.ONE[:1], jax.numpy.flip(A[1:])])
             B = jax.numpy.flip(jax.lax.associative_scan(mul,AA))
@@ -363,7 +331,6 @@ def proj(a,f):
 
 class array:
     def __init__(self, a, dtype = field(2,1), lifted = False):
-    
         if type(a) == int:
             a = jax.numpy.array([a], dtype = DTYPE)
         elif type(a) == list:
@@ -371,7 +338,6 @@ class array:
         if len(a.shape) > 3:
             print('ERROR: poppy arrays are three dimensional.')
             return
-
         self.field = dtype 
         self.shape = (a.shape[0], 1, 1) if len(a.shape) == 1 else (1, a.shape[0], a.shape[1]) if len(a.shape) == 2 else a.shape
         self.shape = (self.shape[0], self.shape[1] // self.field.n, self.shape[2] // self.field.n) if lifted else self.shape
@@ -681,10 +647,8 @@ def psl2mod(q):
 
 @functools.partial(jax.jit, static_argnums = 0)
 def pS1(p):
-
     def norm(a):
         return a[0]*a[0]+a[1]*a[1]
-
     R = Z2(p)
     N = jax.vmap(norm)(R)%p
     M = jax.numpy.where(N == (p-1), N, -1)
@@ -692,10 +656,8 @@ def pS1(p):
 
 @functools.partial(jax.jit, static_argnums = (0,1))
 def S3(p,r): # r = sqrt(p).
-
     def norm(a):
         return a[0,0]*a[0,0]+a[0,1]*a[0,1]+a[1,0]*a[1,0]+a[1,1]*a[1,1]
-    
     R = M2(2*r)-r
     N = jax.vmap(norm)(R)
     return R, jax.numpy.where(N == p,N,-1) # The integer three sphere x*x + y*y + z*z + t*t = p.
@@ -703,11 +665,9 @@ def S3(p,r): # r = sqrt(p).
 def S(p,q):
     xy = pS1(q)
     x, y = xy[0], xy[1]
-
     def f(s):
         a, b, c, d = s[0,0], s[0,1], s[1,0], s[1,1]
         return jax.numpy.array([[a+b*x+d*y, c+d*x-b*y],[-c+d*x-b*y, a-b*x-d*y]], dtype = DTYPE)%q
-
     R, i = S3(p,1+int(jax.numpy.sqrt(p)))
     i = jax.numpy.where(i >= 0)
     R0 = R[i,0,0]
