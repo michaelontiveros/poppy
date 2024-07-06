@@ -205,7 +205,7 @@ class field:
         self.LEG = self.leg() # Legendre symbol mod p.
 
     def __repr__(self):
-        return f'the field of order {self.q}.'
+        return f'the field of order {self.q}'
         
     def x(self):
 
@@ -455,9 +455,7 @@ class array:
         return proj(self.REP, self.field)
 
     def trace(self):  
-        def t(i):
-            return jax.numpy.trace(block(self.REP[i,:,:], self.field)) % self.field.p  
-        return array(jax.vmap(t)(jax.numpy.arange(self.shape[0])), dtype = self.field, lifted = True)
+        return array(jax.numpy.trace(block(self.REP, self.field), axis1 = 1, axis2 = 2) % self.field.p, dtype = self.field, lifted = True)
 
     def det(self):
         b = block(self.REP, self.field)
