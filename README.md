@@ -36,5 +36,5 @@ of the matrix algebra `M_d( F )`. A matrix `mod p` is a `jax.numpy.int64` array 
 | `a.lu()`  | ` 18 ms`  |
 | `a.inv()`  | ` 38 ms`  |
 | `a.det()`  | ` 42 ms`  |
-| `lps(139,103)` | `  1 s` |
+| `lps(139,103)` | `898 ms` |
 
