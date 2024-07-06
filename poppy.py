@@ -231,7 +231,7 @@ class field:
         self.LEG = self.leg() # Legendre symbol mod p.
 
     def __repr__(self):
-        return f'the field of order {self.q}'
+        return f'field {self.q}'
         
     def x(self):
 
