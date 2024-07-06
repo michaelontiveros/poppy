@@ -169,16 +169,20 @@ qgetrf_vmap = jax.vmap(qgetrf, in_axes = (0, None, None))
 
 def pinv(a, inv, b): # Matrix inverse mod p.
     
-    if len(a) == 1:
-        return inv[a[0,0]].reshape((1,1))
+    if a.shape[1] == 1:
+        return inv[a[:,0,0]].reshape((a.shape[0],1,1))
 
     p = 1+inv[-1]
-    I = jax.numpy.eye(len(a), dtype = DTYPE)
-    l, u, d, iperm = pgetrf(a, inv, b)
-    D = inv[d]
-    L = ptrsm(l, I, p) # L = 1/l.
-    U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
-    return (U@L%p)[:,iperm]
+    I = jax.numpy.eye(a.shape[1], dtype = DTYPE)
+   
+    def inverse(A):
+        l, u, d, iperm = pgetrf(A, inv, b)
+        D = inv[d]
+        L = ptrsm(l, I, p) # L = 1/l.
+        U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
+        return (U@L%p)[:,iperm]
+    
+    return jax.vmap(inverse)(a)
 
 def qdet(a, inv, p, b): # Matrix determinant over a finite field.
     l, u, d, iperm, parity = qgetrf(a, inv, b)
@@ -469,10 +473,8 @@ class array:
     def lu_block(self):
         return qgetrf_vmap(block(self.REP, self.field), self.field.INV, 32)
 
-    def inv(self):    
-        def f(i):
-            return pinv(self.REP[i], self.field.INV, 32)
-        return array(jax.vmap(f)(jax.numpy.arange(self.shape[0])), dtype = self.field, lifted = True)
+    def inv(self):
+        return array(pinv(self.REP, self.field.INV, 32), dtype = self.field, lifted = True)
 
 # END ARRAY
 # BEGIN RANDOM
