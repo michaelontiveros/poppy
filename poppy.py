@@ -706,21 +706,23 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
         a, b = A[0,0], A[0,1]
         sa = jax.numpy.sign(a)
         c = f.INV[sa*a + (1-sa)*b]
-        return c*A%q
+        return (c*A)%q
 
     @jax.jit
     def normpsl(A):
         a, b = A[0,0], A[0,1]
-        sa, sqa, sqb = jax.numpy.sign(a), jax.numpy.sign((q//2)-a), jax.numpy.sign((q//2)-b)
+        sa = jax.numpy.sign(a)
+        sqa = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(a, jax.numpy.float64)), jax.numpy.int64)
+        sqb = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(b, jax.numpy.float64)), jax.numpy.int64)
         s = sa*sqa + (1-sa)*sqb
-        return s*A%q
+        return (s*A)%q
 
     @jax.jit
     def norm(A):
-        return jax.lax.cond(l==1, normpsl, normpgl, A)
+        return jax.lax.cond(l == 1, normpsl, normpgl, A)
     #norm = normpsl if f.LEG[p%q] == 1 else normpgl
     V = jax.vmap(norm)(S(p,q))
-
+    
     @jax.jit
     def enc(a):
         return jax.numpy.sum(a.ravel() * q**jax.numpy.arange(4), dtype = jax.numpy.uint32)
@@ -738,7 +740,7 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
         a = jax.vmap(norm)(jax.numpy.tensordot(dec(x), V, axes = (1,1)).swapaxes(0,1)%q)
         return jax.vmap(enc)(a)
 
-    G, i = psl2mod(q) if f.LEG[p] == 1 else pgl2mod(q)
+    G, i = psl2mod(q) if l == 1 else pgl2mod(q)
     graph = jax.vmap(mul)(G)
     return graph, i
 
