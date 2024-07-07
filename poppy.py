@@ -112,7 +112,6 @@ def pgetrf(a, inv, b): # Blocked lu decompposition mod p.
         a = a.at[i:, i:i+bb].set( ap[:,:-1])  # Update block C.
         a = a.at[i:i+bb, i+bb:].set(ptrsm( a[i:i+bb, i:i+bb], a[i:i+bb, i+bb:], p )) # Update block B.
         a = a.at[i+bb:, i+bb:].set((a[i+bb:, i+bb:] - jax.lax.dot(a[i+bb: , i:i+bb], a[i:i+bb, i+bb:])) % p) # Update block D.
-
     l = jax.numpy.fill_diagonal(jax.numpy.tril(a), 1, inplace = False)
     u = jax.numpy.tril(a.T).T
     d = jax.numpy.diagonal(u)
@@ -469,6 +468,9 @@ class array:
             return array(pinv(self.REP[0], self.field.INV, 32), dtype = self.field, lifted = True)
         return array(pinv_vmap(self.REP, self.field.INV, 32), dtype = self.field, lifted = True)
 
+    def rank(self):
+        return jax.numpy.count_nonzero(self.lu()[2], axis = 1)
+
 # END ARRAY
 # BEGIN RANDOM
 
@@ -614,6 +616,25 @@ def psl2(f):
     i = jax.numpy.nonzero(jax.numpy.where((m2d == 1) & m2n, m2c, 0))[0]
     psl2c = m2c[i]
     idx = f.q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
+    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
+    return psl2c, idx
+
+def psl2mod1(q):
+    assert q < 256
+    if q == 2:
+        return pgl2mod(q)
+
+    #@jax.jit
+    def normed(x):
+        A = decode(x,q)
+        a, b, c, d = A[0,0], A[0,1], A[1,0], A[1,1]
+        return (((a*d-b*c)%q) == 1) & (((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2)))
+
+    m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
+    m2n = jax.vmap(normed)(m2c)
+    i = jax.numpy.nonzero(jax.numpy.where(m2n, m2c, 0))[0]
+    psl2c = m2c[i]
+    idx = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return psl2c, idx
 
