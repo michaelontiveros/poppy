@@ -54,19 +54,6 @@ def ptrsm(a,b,p): # Triangular solve mod p.
     return ptrsm_vmap(b)
 
 @jax.jit
-def qtrsm(a,b,p): # Triangular solve over a finite field.
-    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c,n,n).
-    ZERO = jax.numpy.zeros((b.shape[-1],b.shape[-1]), dtype = DTYPE) # b has shape (c,d,n,n).
-    def ptrsm_vmap(bb): # bb is the array b.
-        def ptrsm_scan(bc): # bc has shape (c,n,n). it is a column of bb.
-            def f(x,j):
-                x = x.at[j].set((bc[j] - jax.numpy.tensordot(a[j], x, axes = ([0,2],[0,1]))) % p)
-                return x, x[j]  
-            return jax.lax.scan( f, jax.numpy.where( R[:,None,None] == 0, bc[0], ZERO ), R[1:] )[0] # scan the rows of a.
-        return jax.vmap(ptrsm_scan)(bb.swapaxes(0,1)).swapaxes(0,1)  # vmap the columns of b.
-    return ptrsm_vmap(b)
-
-@jax.jit
 def pgetrf2(aperm, inv): # Sequential lu decomposition mod p.
     p = 1+inv[-1] # p is prime.
     I = jax.numpy.arange(aperm.shape[0])
@@ -78,25 +65,6 @@ def pgetrf2(aperm, inv): # Sequential lu decomposition mod p.
         ap = ap.at[:,i].set( jax.numpy.where( I > i, (ap[:,i] * inv[ ap[i,i] ]) % p, ap[:,i] ) )  # Scale column i.
         ap = ap.at[:,:-1].set((ap[:,:-1] - jax.numpy.where((I[:,None] > i) & (J[None,:] > i), jax.numpy.outer(ap[:,i], ap[i,:-1]), 0)) % p) # Update block D.     
         return ap, i
-    return jax.lax.scan(f, aperm, R, unroll = False)[0]
-
-@jax.jit
-def qgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
-    a, perm, parity = aperm
-    p = 1+inv[-1] # p is prime.
-    I = jax.numpy.arange(a.shape[0])
-    J = jax.numpy.arange(a.shape[1])
-    R = jax.numpy.arange(min(len(I),len(J)))
-    def f(ap, i):
-        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (r,). parity has shape (1,).
-        ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
-        j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
-        a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
-        perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
-        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,None,None] > i, (jax.numpy.tensordot(a[:,i,:,:], pinv(a[i,i,:,:], inv, 32), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
-        a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
-        parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
-        return (a, perm, parity), j
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
@@ -118,8 +86,63 @@ def pgetrf(a, inv, b): # Blocked lu decompposition mod p.
     iperm = jax.numpy.arange(len(perm))
     iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm
-
 pgetrf_vmap = jax.vmap(pgetrf, in_axes = (0, None, None))
+
+def pinv(a, inv, b): # Matrix inverse mod p.
+    if len(a) == 1:
+        return inv[a[0,0]].reshape((1,1))
+    p = 1+inv[-1]
+    I = jax.numpy.eye(len(a), dtype = DTYPE)
+    l, u, d, iperm = pgetrf(a, inv, b)
+    D = inv[d]
+    L = ptrsm(l, I, p) # L = 1/l.
+    U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
+    return (U@L%p)[:,iperm]
+
+def pinv_vmap(a, inv, b): # Matrix inverse mod p.
+    if a.shape[1] == 1:
+        return inv[a[:,0,0]].reshape((a.shape[0],1,1))
+    p = 1+inv[-1]
+    I = jax.numpy.eye(a.shape[1], dtype = DTYPE)
+    def inverse(A):
+        l, u, d, iperm = pgetrf(A, inv, b)
+        D = inv[d]
+        L = ptrsm(l, I, p) # L = 1/l.
+        U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
+        return (U@L%p)[:,iperm]
+    return jax.vmap(inverse)(a)
+
+@jax.jit
+def qtrsm(a,b,p): # Triangular solve over a finite field.
+    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c,n,n).
+    ZERO = jax.numpy.zeros((b.shape[-1],b.shape[-1]), dtype = DTYPE) # b has shape (c,d,n,n).
+    def ptrsm_vmap(bb): # bb is the array b.
+        def ptrsm_scan(bc): # bc has shape (c,n,n). it is a column of bb.
+            def f(x,j):
+                x = x.at[j].set((bc[j] - jax.numpy.tensordot(a[j], x, axes = ([0,2],[0,1]))) % p)
+                return x, x[j]  
+            return jax.lax.scan( f, jax.numpy.where( R[:,None,None] == 0, bc[0], ZERO ), R[1:] )[0] # scan the rows of a.
+        return jax.vmap(ptrsm_scan)(bb.swapaxes(0,1)).swapaxes(0,1)  # vmap the columns of b.
+    return ptrsm_vmap(b)
+
+@jax.jit
+def qgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
+    a, perm, parity = aperm
+    p = 1+inv[-1] # p is prime.
+    I = jax.numpy.arange(a.shape[0])
+    J = jax.numpy.arange(a.shape[1])
+    R = jax.numpy.arange(min(len(I),len(J)))
+    def f(ap, i):
+        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (r,). parity has shape (1,).
+        ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
+        j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
+        a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
+        perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
+        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,None,None] > i, (jax.numpy.tensordot(a[:,i,:,:], pinv(a[i,i,:,:], inv, 32), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
+        a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
+        parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
+        return (a, perm, parity), j
+    return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def qgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
@@ -146,32 +169,7 @@ def qgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
     iperm = jax.numpy.arange(len(perm))
     iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm, parity
-
 qgetrf_vmap = jax.vmap(qgetrf, in_axes = (0, None, None))
-
-def pinv(a, inv, b): # Matrix inverse mod p.
-    if len(a) == 1:
-        return inv[a[0,0]].reshape((1,1))
-    p = 1+inv[-1]
-    I = jax.numpy.eye(len(a), dtype = DTYPE)
-    l, u, d, iperm = pgetrf(a, inv, b)
-    D = inv[d]
-    L = ptrsm(l, I, p) # L = 1/l.
-    U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
-    return (U@L%p)[:,iperm]
-
-def pinv_vmap(a, inv, b): # Matrix inverse mod p.
-    if a.shape[1] == 1:
-        return inv[a[:,0,0]].reshape((a.shape[0],1,1))
-    p = 1+inv[-1]
-    I = jax.numpy.eye(a.shape[1], dtype = DTYPE)
-    def inverse(A):
-        l, u, d, iperm = pgetrf(A, inv, b)
-        D = inv[d]
-        L = ptrsm(l, I, p) # L = 1/l.
-        U = ptrsm((D*u%p).T, D*I, p).T # U = 1/u.      
-        return (U@L%p)[:,iperm]
-    return jax.vmap(inverse)(a)
 
 def qdet(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
@@ -624,17 +622,29 @@ def psl2mod1(q):
     if q == 2:
         return pgl2mod(q)
 
-    #@jax.jit
+    @jax.jit
+    def det(x):
+        a = decode(x,q)
+        return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
+
+    @jax.jit
     def normed(x):
         A = decode(x,q)
-        a, b, c, d = A[0,0], A[0,1], A[1,0], A[1,1]
-        return (((a*d-b*c)%q) == 1) & (((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2)))
+        a, b = A[0,0], A[0,1]
+        return ((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2))
 
-    m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
-    m2n = jax.vmap(normed)(m2c)
-    i = jax.numpy.nonzero(jax.numpy.where(m2n, m2c, 0))[0]
+
+    @jax.jit
+    def mask():
+        idx = q**4*jax.numpy.ones(q**4, dtype = jax.numpy.uint32)
+        m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
+        m2d = jax.vmap(det)(m2c)
+        m2n = jax.vmap(normed)(m2c)
+        m2n = jax.numpy.where((m2d == 1) & m2n, m2c, 0)
+        return m2c, m2n, idx
+    m2c, m2n, idx = mask()
+    i = jax.numpy.nonzero(m2n)[0]
     psl2c = m2c[i]
-    idx = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return psl2c, idx
 
@@ -664,7 +674,7 @@ def psl2mod(q):
     return psl2c, idx
 
 # END GROUPS
-# BEGIN EXPANDER
+# BEGIN EXPANDERS
 
 @functools.partial(jax.jit, static_argnums = 0)
 def pS1(p):
@@ -744,5 +754,5 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
     graph = jax.vmap(mul)(G)
     return graph, i
 
-# END EXPANDER
+# END EXPANDERS
 # END POPPY
