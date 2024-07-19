@@ -545,14 +545,9 @@ def key(s = SEED):
     return jax.random.key(s)
 
 def random(shape, f, s = SEED): 
-    SHAPE = (shape,1,1) if type(shape) == int else shape
-    def fq(ff):
-        return ff.q
-    def mx(ff):
-        return jax.numpy.iinfo(DTYPE).max
-    #MAX = jax.lax.cond(f.n*jax.numpy.log2(f.p) < 63, fq, mx, f)
-    a = jax.random.randint(key(s), SHAPE, 0, MAX, dtype = DTYPE)
-    return array(a,f)
+    SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (shape[0],shape[1],1) if len(shape) == 2 else shape
+    a = jax.random.randint(key(s), SHAPE+(f.n,), 0, f.p, dtype = DTYPE)
+    return array(unravel(jax.vmap(v2m, in_axes = (0,None))(a.reshape((-1,f.n)),f).reshape((SHAPE[0],-1,f.n,f.n)),f,SHAPE[:-2]+(SHAPE[-2]*f.n,SHAPE[-1]*f.n)),f, lifted = True)
 
 # END RANDOM
 # BEGIN PLOT
