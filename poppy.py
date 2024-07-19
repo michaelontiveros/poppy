@@ -4,6 +4,7 @@
 import jax
 import conway_polynomials
 import functools
+import matplotlib.pyplot
 
 # 64 bit integer arrays encode numbers in finite fields.
 jax.config.update("jax_enable_x64", True)
@@ -11,6 +12,34 @@ DTYPE = jax.numpy.int64
 
 # Finite fields are polynomial rings modulo Conway polynomials.
 CONWAY = conway_polynomials.database()
+
+p12 = 3329
+p22 = 4194191
+p30 = 999999733
+
+CONWAY[p22] = {}
+CONWAY[p30] = {}
+
+CONWAY[p12][256] = (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+
+CONWAY[p22][32] = (1210382, 2465089, 2473115, 1675214, 1402336, 2768999, 1423446, 3813950, 300273, 2698959, 2739930, 288062, 1937372, 1497279, 3718707, 684317, 3086020, 1187785, 3245176, 4101125, 3053698, 2428306, 430958, 1959819, 2481505, 3556404, 3611824, 136721, 56755, 4193498, 4193819, 1, 1)
+CONWAY[p22][64] = (2113114, 2865230, 1576056, 3726964, 2877627, 499207, 2035891, 2007157, 625689, 3100185, 3324040, 546690, 676409, 1083835, 2204012, 3956530, 3639404, 951145, 1430843, 343435, 1535584, 1706721, 2557097, 1812042, 2660473, 551889, 1964759, 3794689, 3016365, 3639000, 3307938, 1631856, 3950905, 2203751, 401388, 237219, 1096646, 192834, 4078359, 2208065, 2343083, 1293731, 642048, 1067968, 2116063, 4046513, 623914, 2313263, 309590, 884598, 1852277, 2448870, 1416168, 2308687, 1232242, 2956988, 3264982, 3833720, 1675882, 217763, 65065, 4193348, 4193813, 1, 1)
+CONWAY[p22][128] = (3133421, 88403, 1589587, 2909025, 1947932, 1225311, 424283, 3045769, 3412942, 3528628, 4067083, 707002, 2893288, 2504860, 3737776, 1938463, 2834128, 567607, 708408, 935357, 1223815, 2525367, 3882712, 609233, 3433020, 1753395, 1362370, 1963203, 3076617, 682623, 104210, 1393179, 3754654, 4156996, 2072991, 1637153, 552476, 4193193, 2501505, 266823, 2921479, 65530, 1222221, 331871, 1756060, 2932245, 2693668, 2025618, 586524, 3172278, 721227, 3807584, 2185003, 2248009, 3223478, 3680719, 962420, 1599177, 3498371, 575936, 3619948, 2315835, 587007, 1446277, 2441306, 738019, 731121, 538389, 119078, 2514615, 3518614, 2674450, 3554783, 2056540, 3985179, 1671120, 413524, 1193541, 3528041, 3585378, 4144966, 1482613, 2006414, 389176, 725556, 4019057, 1475793, 2966325, 3851978, 2460650, 1157580, 759005, 3229412, 3644368, 3216267, 2984962, 3462836, 1013948, 2942350, 2050904, 21951, 4101626, 2340097, 2712950, 3742225, 1101759, 807746, 3043570, 3123790, 3665199, 1964294, 4075652, 654006, 3222199, 738778, 2471354, 2311314, 423868, 2499755, 171152, 316179, 2179489, 513830, 251663, 69250, 4193309, 4193810, 1, 1)
+
+CONWAY[p30][32] = (27583, 93555, 999979589, 999800744, 175914, 999685076, 132437, 999673390, 496535, 151090, 431212, 999462160, 98317, 33297, 541045, 999835792, 999862880, 999688933, 75534, 54402, 95912, 999983150, 999989224, 999983931, 1854, 1071, 1385, 999999634, 999999680, 999999673, 2, 1, 1) # PARI/GP: Vecrev(lift(Vec(ffinit(999999733,32))))
+CONWAY[p30][64] = (880158359, 421910987, 238580159, 47835162, 125188131, 203934989, 164672785, 362892651, 887918584, 521609740, 24133069, 86039701, 214120832, 23365488, 654306687, 69149380, 344957381, 692130410, 243093192, 201020705, 834659236, 673379853, 23445898, 85914969, 19546546, 16408258, 696013949, 475723044, 330268037, 347300024, 273007531, 55530684, 328005007, 674587458, 392709403, 158715956, 586029521, 996777825, 312436560, 717852169, 909508614, 398983312, 982554754, 131964166, 713742405, 445760565, 663413759, 920919556, 952784420, 934855743, 6164104, 3531442, 4536664, 999671374, 999818632, 999782267, 11326, 6031, 6793, 999999506, 999999616, 999999609, 2, 1, 1) # PARI/GP: Vecrev(lift(Vec(ffinit(999999733,64))))
+CONWAY[p30][128] = (928209554, 689007997, 472485176, 311285921, 272458838, 229002643, 526199429, 748788741, 158402309, 925169829, 607190820, 266515213, 911332241, 21650296, 407449831, 606489086, 265113041, 867081435, 180429632, 925706999, 112686331, 958957946, 754893271, 68756580, 276636789, 167171103, 188832257, 264467404, 463644290, 383082157, 754617689, 567989677, 304813600, 401831854, 85865675, 624795044, 613047041, 773771412, 485323633, 741466547, 214401332, 23836307, 469318615, 15716832, 584372832, 199675878, 604520832, 883896696, 68443640, 320810623, 46618158, 84119126, 344029114, 384386949, 460884580, 318695963, 855693480, 232903525, 308055698, 160381091, 466451351, 835227787, 883525455, 636838051, 399737446, 845304369, 649162109, 365256802, 543813349, 814514710, 564586964, 716267650, 590065529, 979017259, 231493101, 874990194, 525337367, 613803546, 253612586, 736002404, 833094381, 517615489, 775532462, 57085789, 907036708, 682687804, 30153072, 898793307, 976984826, 819505151, 366020328, 27957222, 240548646, 189925218, 484884196, 554094810, 248828094, 392437155, 542166060, 323232758, 942826697, 540641589, 490212731, 976754548, 97293091, 681872372, 657942597, 179669288, 889075267, 671880645, 444029812, 53206735, 646778118, 534319291, 254877140, 967882434, 58219934, 785914891, 694008030, 165003883, 616862256, 960237312, 992125181, 251663, 69250, 999998851, 999999352, 1, 1) # PARI/GP: Vecrev(lift(Vec(ffinit(999999733,128))))
 
 # The pseudo random number generator has a default seed.
 SEED = 0 
@@ -40,6 +69,14 @@ def pmatmul(a,b,p):
 
 # END MODULAR ARITHMETIC
 # BEGIN LINEAR ALGEBRA
+
+@jax.jit
+def transpose(a):
+    return a.swapaxes(-2,-1) 
+
+@jax.jit
+def ptrace(a,p):
+    return jax.numpy.trace(a, axis1=-2, axis2=-1)%p
 
 @jax.jit
 def ptrsm(a,b,p): # Triangular solve mod p.
@@ -189,49 +226,18 @@ def qdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
 # BEGIN FIELD
 
 class field:
-    def __init__(self, p, n):    
+    def __init__(self, p, n, inv = True):    
         self.p = p
         self.n = n
+        self.q = p**n
         self.q = p ** n if n*jax.numpy.log2(p) < 63 else None
-        self.CONWAY = CONWAY[p][n]
-        self.RANGE = jax.numpy.arange(n, dtype = DTYPE)
-        self.ONE = jax.numpy.ones(  n, dtype = DTYPE)
-        self.I = jax.numpy.eye(   n, dtype = DTYPE)
-        self.BASIS = jax.numpy.power( p * self.ONE, self.RANGE )
-        self.X = self.x()     # Powers of the Conway matrix.
-        self.INV = self.inv() # Multiplicative inverse mod p.
-        self.LEG = self.leg() # Legendre symbol mod p.
+        self.INV = self.inv() if inv else None # Multiplicative inverse mod p.
+        self.BASIS = self.basis()     # Powers of the Conway matrix.
+        self.DUALBASIS = self.dualbasis()
 
     def __repr__(self):
         return f'field {self.q}'
-        
-    def x(self):
-
-        @jax.jit
-        def id(a,i):
-            return a
-        stack = jax.vmap(id, (None,0))
-        
-        @jax.jit
-        def neg(a):
-            return pneg(a, self.p)
-        
-        @jax.jit
-        def matmul(a,b):
-            return pmatmul(a, b, self.p)
-        
-        @jax.jit
-        def x_scan():
-            # V is the vector of subleading coefficients of the Conway polynomial.
-            V = jax.numpy.array(self.CONWAY[:-1], dtype = DTYPE)
-            # M is the companion matrix of the Conway polynomial.
-            M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(self.I[1:,1:]).at[-1].set(neg(V))
-            # X is the array of powers of M.
-            X = jax.lax.associative_scan(matmul, stack(M,self.RANGE).at[0].set(self.I))
-            return X
-
-        return x_scan()
-    
+     
     def inv(self):
         
         @jax.jit
@@ -247,17 +253,69 @@ class field:
         @jax.jit
         def inv_scan():    
             A = jax.numpy.arange(1, self.p, dtype = DTYPE)
-            AA = jax.numpy.concatenate([self.ONE[:1], jax.numpy.flip(A[1:])])
+            AA = jax.numpy.concatenate([jax.numpy.ones(1, dtype = DTYPE), jax.numpy.flip(A[1:])])
             B = jax.numpy.flip(jax.lax.associative_scan(mul,AA))
             C = jax.numpy.ones(self.p - 1, dtype = DTYPE).at[0].set(self.p - 1)
             ABC = jax.numpy.vstack([A,B,C]).T       
             return jax.numpy.concatenate([jax.numpy.zeros(1, dtype = DTYPE), jax.lax.scan(inv_jit, ABC, A)[1]])
         
         return inv_scan()
+   
+    def basis(self):
 
+        @jax.jit
+        def id(a,i):
+            return a
+        stack = jax.vmap(id, (None,0))
+        
+        @jax.jit
+        def neg(a):
+            return pneg(a, self.p)
+        
+        @jax.jit
+        def matmul(a,b):
+            return pmatmul(a, b, self.p)
+        
+        @jax.jit
+        def basis_scan():
+            # V is the vector of subleading coefficients of the Conway polynomial.
+            V = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
+            # M is the companion matrix of the Conway polynomial.
+            M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(jax.numpy.eye(self.n-1, dtype = DTYPE)).at[-1].set(neg(V))
+            # X is the array of powers of M.
+            X = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
+            return X
+
+        return basis_scan()
+  
+    def dualbasis(self):
+        A = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
+        R = self.BASIS[1]
+        Ri = pinv(R,self.INV,32)
+        DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
+        def dualscan(b,i):
+            b = b.at[i].set((Ri@b[i-1]-Ri*A[i])%self.p)
+            return b, b[i]
+        DD = jax.lax.scan(dualscan,DD,jax.numpy.arange(1,self.n))[0]
+        C = jax.numpy.tensordot(DD,self.BASIS,axes = ([0,2],[0,1]))%self.p
+        Ci = pinv(C,self.INV,32)
+        D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
+        return D   
+    
     def leg(self):
         R = jax.numpy.arange(self.p)
         return (-jax.numpy.ones(self.p, dtype = DTYPE)).at[(R*R) % self.p].set(1).at[0].set(0)
+
+def flatten_field(f):
+    children = (f.BASIS, f.INV)
+    aux_data = (f.p, f.n, f.q)
+    return (children, aux_data)
+def unflatten_field(aux_data, children):
+    f = object.__new__(field)
+    f.BASIS, f.INV = children
+    f.p, f.n, f.q = aux_data
+    return f
+jax.tree_util.register_pytree_node(field, flatten_field, unflatten_field)
 
 # END FIELD
 # BEGIN RESHAPE
@@ -283,15 +341,15 @@ def unravel(i,f,s):
 
 @functools.partial(jax.jit, static_argnums = 1)
 def i2v(i,f):
-    return jax.numpy.floor_divide(i*f.ONE, f.BASIS) % f.p
+    return jax.numpy.floor_divide(i*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.arange(f.n, dtype = DTYPE))) % f.p
 
 @functools.partial(jax.jit, static_argnums = 1)
 def v2i(v,f):
-    return jax.numpy.sum(v*f.BASIS, dtype = DTYPE)
+    return jax.numpy.sum(v*jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.arange(f.n, dtype = DTYPE)), dtype = DTYPE)
 
 @functools.partial(jax.jit, static_argnums = 1)
 def v2m(v,f):
-    return jax.numpy.dot(v, f.X) % f.p
+    return jax.numpy.dot(v, f.BASIS) % f.p
 
 @functools.partial(jax.jit, static_argnums = 1)
 def m2v(m,f):
@@ -301,7 +359,7 @@ def m2v(m,f):
 def i2m(i,f):
     return v2m(i2v(i,f), f)
 
-@functools.partial( jax.jit, static_argnums = 1 )
+@functools.partial( jax.jit, static_argnums = 1)
 def m2i(m,f):
     return v2i(m[0], f)
 
@@ -469,19 +527,41 @@ class array:
     def rank(self):
         return jax.numpy.count_nonzero(self.lu()[2], axis = 1)
 
+def flatten_array(a):
+    children = (a.shape, a.REP)
+    aux_data = (a.field,)
+    return (children, aux_data)
+def unflatten_array(aux_data, children):
+    a = object.__new__(array)
+    a.shape, a.REP = children
+    a.field, = aux_data
+    return a
+jax.tree_util.register_pytree_node(array, flatten_array, unflatten_array)
+
 # END ARRAY
 # BEGIN RANDOM
 
 def key(s = SEED):
-    return jax.random.PRNGKey(s)
+    return jax.random.key(s)
 
 def random(shape, f, s = SEED): 
     SHAPE = (shape,1,1) if type(shape) == int else shape
-    MAX = f.q if f.n*jax.numpy.log2(f.p) < 63 else jax.numpy.iinfo(DTYPE).max
+    def fq(ff):
+        return ff.q
+    def mx(ff):
+        return jax.numpy.iinfo(DTYPE).max
+    #MAX = jax.lax.cond(f.n*jax.numpy.log2(f.p) < 63, fq, mx, f)
     a = jax.random.randint(key(s), SHAPE, 0, MAX, dtype = DTYPE)
     return array(a,f)
 
 # END RANDOM
+# BEGIN PLOT
+
+def plot(a, cmap = 'twilight_shifted'):
+    matplotlib.pyplot.matshow(a.reshape((-1,a.shape[-1])).T, cmap = cmap, interpolation = 'none')
+    matplotlib.pyplot.show()
+
+# END PLOT
 # BEGIN RINGS
 
 @functools.partial(jax.jit, static_argnums = 0)
@@ -709,7 +789,7 @@ def S(p,q):
 def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cayley graph for the group PSL2q or PGL2q.
     assert (p in CONWAY) and (q in CONWAY) and (p != q) and (p > 2) and (q > 2) and (q*q > 4*p)
     f = field(q,1)
-    l = f.LEG[p%q]
+    l = f.leg()[p%q]
 
     @jax.jit
     def normpgl(A):
