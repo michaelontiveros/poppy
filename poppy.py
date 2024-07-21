@@ -274,19 +274,16 @@ class field:
         
         @jax.jit
         def matmul(a,b):
-            return pmatmul(a, b, self.p)
+            return pmatmul(a,b, self.p)
         
-        @jax.jit
-        def basis_scan():
-            # V is the vector of subleading coefficients of the Conway polynomial.
-            V = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
-            # M is the companion matrix of the Conway polynomial.
-            M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(jax.numpy.eye(self.n-1, dtype = DTYPE)).at[-1].set(neg(V))
-            # X is the array of powers of M.
-            X = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
-            return X
+        # V is the vector of subleading coefficients of the Conway polynomial.
+        V = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
+        # M is the companion matrix of the Conway polynomial.
+        M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(jax.numpy.eye(self.n-1, dtype = DTYPE)).at[-1].set(neg(V))
+        # X is the array of powers of M.
+        X = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
+        return X
 
-        return basis_scan()
   
     def dualbasis(self):
         A = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
@@ -301,7 +298,7 @@ class field:
         Ci = pinv(C,self.INV,32)
         D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
         return D   
-    
+
     def leg(self):
         R = jax.numpy.arange(self.p)
         return (-jax.numpy.ones(self.p, dtype = DTYPE)).at[(R*R) % self.p].set(1).at[0].set(0)
@@ -552,24 +549,25 @@ def random(shape, f, s = SEED):
 # END RANDOM
 # BEGIN PLOT
 
-def plot(a, cmap = 'twilight_shifted'):
+def plot(a, title = '', cmap = 'twilight_shifted'):
     matplotlib.pyplot.matshow(a.reshape((-1,a.shape[-1])).T, cmap = cmap, interpolation = 'none')
+    matplotlib.pyplot.title(title)
     matplotlib.pyplot.show()
 
 # END PLOT
 # BEGIN RINGS
 
 @functools.partial(jax.jit, static_argnums = 0)
-def Z2(q):
+def Z2(q): # The finite ring Z/q x Z/q.
     Zq = jax.numpy.arange(q)
     Z2q = jax.numpy.array([jax.numpy.tile(Zq,q), jax.numpy.repeat(Zq,q)]).T
-    return Z2q # The finite ring Z/q x Z/q.
+    return Z2q
 
 @functools.partial(jax.jit, static_argnums = 0)
-def M2(q):
+def M2(q): # The finite ring M_2( Z/q ).
     Z2q = Z2(q)
     M2q = jax.numpy.array([jax.numpy.tile(Z2q.T,q*q).T, jax.numpy.repeat(Z2q.T,q*q).reshape(2,-1).T]).swapaxes(0,1).reshape(-1,2,2)
-    return M2q # The finite ring M_2( Z/q ).
+    return M2q
 
 # END RINGS
 # BEGIN ENCODE/DECODE 2D
@@ -589,7 +587,7 @@ def decode(x,q): # x is nonnegative and q < 256.
 # END ENCODE/DECODE 2D
 # BEGIN GROUPS
 
-def gl2(f):
+def gl2(f): # The general linear group GL_2( F ).
 
     @jax.jit
     def det(x):
@@ -605,7 +603,7 @@ def gl2(f):
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return gl2c, idx
 
-def sl2(f):
+def sl2(f): # The special linear group SL_2( F ).
 
     @jax.jit
     def det(x):
@@ -621,7 +619,7 @@ def sl2(f):
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return sl2c, idx
 
-def pgl2(f):
+def pgl2(f): # The projective general linear group PGL_2( F ).
     assert f.q < 256
 
     @jax.jit
@@ -644,7 +642,7 @@ def pgl2(f):
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return pgl2c, idx
 
-def pgl2mod(q):
+def pgl2mod(q): # The projective general linear group PGL_2( Z/q ).
     assert q < 256
 
     @jax.jit
@@ -667,7 +665,7 @@ def pgl2mod(q):
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return pgl2c, idx
 
-def psl2(f):
+def psl2(f): # The projective special linear group PSL_2( F ).
     assert f.q < 256
     if f.p == 2:
         return pgl2(f)
@@ -692,38 +690,7 @@ def psl2(f):
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return psl2c, idx
 
-def psl2mod1(q):
-    assert q < 256
-    if q == 2:
-        return pgl2mod(q)
-
-    @jax.jit
-    def det(x):
-        a = decode(x,q)
-        return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
-
-    @jax.jit
-    def normed(x):
-        A = decode(x,q)
-        a, b = A[0,0], A[0,1]
-        return ((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2))
-
-
-    @jax.jit
-    def mask():
-        idx = q**4*jax.numpy.ones(q**4, dtype = jax.numpy.uint32)
-        m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
-        m2d = jax.vmap(det)(m2c)
-        m2n = jax.vmap(normed)(m2c)
-        m2n = jax.numpy.where((m2d == 1) & m2n, m2c, 0)
-        return m2c, m2n, idx
-    m2c, m2n, idx = mask()
-    i = jax.numpy.nonzero(m2n)[0]
-    psl2c = m2c[i]
-    idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
-    return psl2c, idx
-
-def psl2mod(q):
+def psl2mod(q): # The projective special linear group PSL_2( Z/q ).
     assert q < 256
     if q == 2:
         return pgl2mod(q)
