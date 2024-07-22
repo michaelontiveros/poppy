@@ -528,8 +528,8 @@ def random(shape, f, s = SEED):
 # END RANDOM
 # BEGIN PLOT
 
-def plot(a, title = '', size = 10, cmap = 'twilight_shifted'):
-    matplotlib.rc('figure', figsize=(100, 100))
+def plot(a, title = '', size = 6, cmap = 'twilight_shifted'):
+    matplotlib.rc('figure', figsize=(size,size))
     matplotlib.pyplot.matshow(a.reshape((-1,a.shape[-1])).T, cmap = cmap, interpolation = 'none')
     matplotlib.pyplot.title(title)
     matplotlib.pyplot.show()
