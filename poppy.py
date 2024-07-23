@@ -391,7 +391,8 @@ class array:
                 b = jax.vmap(padd, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
             b = jax.vmap(jax.vmap(padd, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
-            return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
+            SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
+            return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
                 b = jax.vmap(padd, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
@@ -420,7 +421,8 @@ class array:
                 b = jax.vmap(psub, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
             b = jax.vmap(jax.vmap(psub, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
-            return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
+            SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
+            return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
                 b = jax.vmap(psub, in_axes = (None,0,None))(self.REP, ravel(a.REP, self.field), self.field.p)
@@ -450,7 +452,8 @@ class array:
                 b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
             b = jax.vmap(jax.vmap(pmatmul, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
-            return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
+            SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
+            return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
                 b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
@@ -497,7 +500,7 @@ class array:
 
     def inv(self):
         if self.shape[0] == 1:
-            return array(pinv(self.REP[0], self.field.INV, 32), dtype = self.field, lifted = True)
+            return array(pinv(self.REP[0], self.field.INV, 32).reshape(self.REP.shape), dtype = self.field, lifted = True)
         return array(pinv_vmap(self.REP, self.field.INV, 32), dtype = self.field, lifted = True)
 
     def rank(self):
@@ -521,7 +524,7 @@ def key(s = SEED):
     return jax.random.key(s)
 
 def random(shape, f, s = SEED): 
-    SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (shape[0],shape[1],1) if len(shape) == 2 else shape
+    SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
     a = jax.random.randint(key(s), SHAPE+(f.n,), 0, f.p, dtype = DTYPE)
     return array(unravel(jax.vmap(v2m, in_axes = (0,None))(a.reshape((-1,f.n)),f).reshape((SHAPE[0],-1,f.n,f.n)),f,SHAPE[:-2]+(SHAPE[-2]*f.n,SHAPE[-1]*f.n)),f, lifted = True)
 
