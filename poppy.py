@@ -323,17 +323,20 @@ def i2v(i,f):
 def v2i(v,f):
     return jax.numpy.sum(v*jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.arange(f.n, dtype = DTYPE)), dtype = DTYPE)
 
-@functools.partial(jax.jit, static_argnums = 1)
-def v2m(v,f):
-    return jax.numpy.dot(v, f.BASIS) % f.p
+@functools.partial(jax.jit, static_argnums = 2)
+def v2m(v,b,f):
+    return jax.numpy.tensordot(v,b, axes = ([-1],[0]))%f.p
+    #return jax.numpy.dot(v, f.BASIS) % f.p
 
-@functools.partial(jax.jit, static_argnums = 1)
-def m2v(m,f):
-    return m[0]
+@jax.jit
+def m2v(m):
+    return m.swapaxes(-1,-2).T[0].T
+    #return m.swapaxes(0,-2)[0].swapaxes
+    #return m[0]
 
 @functools.partial(jax.jit, static_argnums = 1)
 def i2m(i,f):
-    return v2m(i2v(i,f), f)
+    return v2m(i2v(i,f),f.BASIS,f)
 
 @functools.partial( jax.jit, static_argnums = 1)
 def m2i(m,f):
@@ -526,7 +529,7 @@ def key(s = SEED):
 def random(shape, f, s = SEED): 
     SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
     a = jax.random.randint(key(s), SHAPE+(f.n,), 0, f.p, dtype = DTYPE)
-    return array(unravel(jax.vmap(v2m, in_axes = (0,None))(a.reshape((-1,f.n)),f).reshape((SHAPE[0],-1,f.n,f.n)),f,SHAPE[:-2]+(SHAPE[-2]*f.n,SHAPE[-1]*f.n)),f, lifted = True)
+    return array(unravel(jax.vmap(v2m, in_axes = (0,None,None))(a.reshape((-1,f.n)),f.BASIS,f).reshape((SHAPE[0],-1,f.n,f.n)),f,SHAPE[:-2]+(SHAPE[-2]*f.n,SHAPE[-1]*f.n)),f, lifted = True)
 
 # END RANDOM
 # BEGIN PLOT
