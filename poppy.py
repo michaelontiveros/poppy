@@ -10,15 +10,16 @@ import matplotlib.pyplot
 jax.config.update("jax_enable_x64", True)
 DTYPE = jax.numpy.int64
 
-# Finite fields are polynomial rings modulo Conway polynomials.
-CONWAY = conway_polynomials.database()
+# A finite field is a polynomial ring modulo an irreducible polynomial.
+POLYNOMIAL = conway_polynomials.database()
 
 p12 = 3329
+p16 = 65521
 p22 = 4194191
 p30 = 999999733
 
-CONWAY[p22] = {}
-CONWAY[p30] = {}
+POLYNOMIAL[p22] = {}
+POLYNOMIAL[p30] = {}
 
 # The pseudo random number generator has a default seed.
 SEED = 0 
@@ -256,7 +257,7 @@ class field:
             return pmatmul(a,b, self.p)
         
         # V is the vector of subleading coefficients of the Conway polynomial.
-        V = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
+        V = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         # M is the companion matrix of the Conway polynomial.
         M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(jax.numpy.eye(self.n-1, dtype = DTYPE)).at[-1].set(neg(V))
         # X is the array of powers of M.
@@ -265,7 +266,7 @@ class field:
 
   
     def dualbasis(self):
-        A = jax.numpy.array(CONWAY[self.p][self.n][:-1], dtype = DTYPE)
+        A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         R = self.BASIS[1]
         Ri = pinv(R,self.INV,32)
         DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
@@ -735,7 +736,7 @@ def S(p,q):
     return jax.vmap(f)(Sp) # p+1 generators for the group PSL2q, if p is a quadratic residue mod q, else PGL2q.
 
 def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cayley graph for the group PSL2q or PGL2q.
-    assert (p in CONWAY) and (q in CONWAY) and (p != q) and (p > 2) and (q > 2) and (q*q > 4*p)
+    assert (p in POLYNOMIAL) and (q in POLYNOMIAL) and (p != q) and (p > 2) and (q > 2) and (q*q > 4*p)
     f = field(q,1)
     l = f.leg()[p%q]
 
