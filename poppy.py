@@ -259,9 +259,9 @@ class field:
         V = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         # M is a matrix root of the irreducible polynomial.
         M = jax.numpy.zeros((self.n,self.n), dtype = DTYPE).at[:-1,1:].set(jax.numpy.eye(self.n-1, dtype = DTYPE)).at[-1].set(neg(V))
-        # X is the array of powers of M.
-        X = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
-        return X
+        # B is the array of powers of M.
+        B = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
+        return B
 
   
     def dual(self):
@@ -300,7 +300,12 @@ jax.tree_util.register_pytree_node(field, flatten_field, unflatten_field)
 def block(a,f): 
     s = a.shape
     n = f.n 
-    return a.reshape(s[:-2] + (s[-2]//n, n, s[-1]//n, n)).swapaxes(-2, -3)
+    return a.reshape(s[:-2]+(s[-2]//n,n, s[-1]//n,n)).swapaxes(-2,-3)
+@functools.partial(jax.jit, static_argnums = 1)
+def unblock(a,f):
+    s = a.shape
+    n = f.n
+    return a.swapaxes(-2,-3).reshape(s[:-4]+(s[-4]*n, s[-3]*n))
 
 # END RESHAPE
 # BEGIN LIFT/PROJECT
@@ -349,54 +354,41 @@ class array:
         self.shape = a.shape
         self.VEC = int2vec(a, self.field)
 
+    def new(self,vec):
+        a = object.__new__(array)
+        a.field = self.field
+        a.shape = vec.shape[:-1]
+        a.VEC = vec
+        return a
+
     def __repr__(self):
         return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
 
     def __neg__(self):
-        a = object.__new__(array)
-        a.field = self.field
-        a.shape = self.shape
-        a.VEC = negmod(self.VEC, self.field.p)
-        return a
+        return self.new(negmod(self.VEC, self.field.p))
     
     def __add__(self, a):
-        a = array1(a,self.field) if type(a) == int else a
-        b = object.__new__(array)
-        b.field = self.field
-        b.VEC = addmod(self.VEC, a.VEC, self.field.p)
-        b.shape = b.VEC.shape[:-1]
-        return b
+        a = array(a,self.field) if type(a) == int else a
+        return self.new(addmod(self.VEC, a.VEC, self.field.p))
     def __radd__(self, a):
         return self.__add__(a)
  
     def __sub__(self, a):
-        a = array1(a,self.field) if type(a) == int else a
-        b = object.__new__(array)
-        b.field = self.field
-        b.VEC = submod(self.VEC, a.VEC, self.field.p)
-        b.shape = b.VEC.shape[:-1]
-        return b
+        a = array(a,self.field) if type(a) == int else a
+        return self.new(submod(self.VEC, a.VEC, self.field.p))
     def __rsub__(self, a):
         return self.__sub__(a)
     
     def __mul__(self, a):
-        a = array1(a,self.field) if type(a) == int else a
-        b = object.__new__(array)
-        b.field = self.field
-        b.VEC = (jax.numpy.expand_dims(self.VEC,3)@vec2mat(a.VEC,a.field))[:,:,:,0,:]%self.field.p
-        b.shape = b.VEC.shape[:-1]
-        return b
+        a = array(a,self.field) if type(a) == int else a
+        return self.new((jax.numpy.expand_dims(self.VEC,3)@vec2mat(a.VEC,a.field))[:,:,:,0,:]%self.field.p)
     def __rmul__(self, a):
         return self.__mul__(a)
     
     def __matmul__(self, a):
         def matmul(b,c):
             return jax.numpy.tensordot(b,vec2mat(c,self.field), axes = ([1,2],[0,2]))%self.field.p
-        b = object.__new__(array)
-        b.field = self.field
-        b.VEC = jax.vmap(matmul)(self.VEC, a.VEC)
-        b.shape = b.VEC.shape[:-1]
-        return b
+        return self.new(jax.vmap(matmul)(self.VEC, a.VEC))
 
     def lift(self):
         return vec2mat(self.VEC, self.field)
@@ -405,18 +397,10 @@ class array:
         return vec2int(self.VEC, self.field)
 
     def trace(self):  
-        a = object.__new__(array)
-        a.field = self.field
-        a.VEC = jax.numpy.trace(self.VEC, axis1 = 1, axis2 = 2)%self.field.p
-        a.shape = a.VEC.shape[:-1]
-        return a
+        return self.new(jax.numpy.trace(self.VEC, axis1 = 1, axis2 = 2)%self.field.p)
 
     def det(self):
-        a = object.__new__(array)
-        a.field = self.field
-        a.VEC = mat2vec(fdet_vmap(vec2mat(self.VEC, self.field), self.field.INV, self.field.p, 32))
-        a.shape = a.VEC.shape[:-1]
-        return a
+        return self.new(mat2vec(fdet_vmap(vec2mat(self.VEC, self.field), self.field.INV, self.field.p, 32)))
 
     def lu(self):
         return mgetrf_vmap(vec2mat(self.VEC, self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, 32)
@@ -425,11 +409,7 @@ class array:
         return fgetrf_vmap(vec2mat(self.VEC, self.field), self.field.INV, 32)
 
     def inv(self):
-        a = object.__new__(array)
-        a.field = self.field
-        a.shape = self.shape
-        a.VEC = mat2vec(block(invmod_vmap(vec2mat(self.VEC, self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, 32),self.field))
-        return a
+        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.VEC, self.field), self.field), self.field.INV, 32),self.field)))
 
     def rank(self):
         return jax.numpy.count_nonzero(self.lu()[2], axis = 1)
