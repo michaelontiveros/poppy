@@ -12,7 +12,7 @@ POPPY is a python module for linear algebra over finite fields on the GPU. It ha
 
 `M_k( F )` is the associative algebra of `k x k` matrices over `F`.
 
-`X = X_y` is the `n x n` companion matrix.
+`X = X_y` is an `n x n` matrix root of the polynomial `y`.
 
 
 # Representation
@@ -29,12 +29,12 @@ of the matrix algebra `M_k( F )`. A matrix `mod p` is a `jax.numpy.int64` array 
 
 | operation  | time (T4 GPU) |
 | ------------- | ------------- |
-| `a+b`  | `170 us`  |
-| `a.trace()` | `329 us` |
+| `a+b`  | `200 us`  |
+| `a.trace()` | `300 us` |
 | `a*c`  | `1.4 ms`  |
-| `a@b`  | `2.2 ms`  |
-| `a.lu()`  | ` 18 ms`  |
-| `a.inv()`  | ` 38 ms`  |
-| `a.det()`  | ` 42 ms`  |
-| `lps(139,103)` | `898 ms` |
+| `a@b`  | `2.8 ms`  |
+| `a.lu()`  | ` 20 ms`  |
+| `a.inv()`  | ` 40 ms`  |
+| `a.det()`  | ` 50 ms`  |
+| `lps(139,103)` | `900 ms` |
 
