@@ -28,23 +28,23 @@ SEED = 0
 # BEGIN MODULAR ARITHMETIC
 
 @functools.partial(jax.jit, static_argnums = 1)
-def pneg(a,p):
+def negmod(a,p):
     return (-a)%p
 
 @functools.partial(jax.jit, static_argnums = 2)
-def padd(a,b,p):
+def addmod(a,b,p):
     return (a+b)%p
 
 @functools.partial(jax.jit, static_argnums = 2)
-def psub(a,b,p):
+def submod(a,b,p):
     return (a-b)%p
 
 @functools.partial(jax.jit, static_argnums = 2)
-def pmul(a,b,p):
+def mulmod(a,b,p):
     return (a*b)%p
 
 @functools.partial(jax.jit, static_argnums = 2)
-def pmatmul(a,b,p):
+def matmulmod(a,b,p):
     return (a@b)%p
 
 # END MODULAR ARITHMETIC
@@ -190,13 +190,13 @@ qgetrf_vmap = jax.vmap(qgetrf, in_axes = (0, None, None))
 
 def qdet(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
-        return pmatmul(A,B,p)
+        return matmulmod(A,B,p)
     l, u, d, iperm, parity = qgetrf(a, inv, b)
     return jax.numpy.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
 
 def qdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
-        return pmatmul(A,B,p)
+        return matmulmod(A,B,p)
     def det(A):
         l, u, d, iperm, parity = qgetrf(A, inv, b)
         return jax.numpy.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
@@ -222,7 +222,7 @@ class field:
         
         @jax.jit
         def mul(a,b):
-            return pmul(a, b, self.p)
+            return mulmod(a, b, self.p)
         
         @functools.partial(jax.jit, static_argnums = 1)
         def inv_jit(ABC, i):
@@ -250,11 +250,11 @@ class field:
         
         @jax.jit
         def neg(a):
-            return pneg(a, self.p)
+            return negmod(a, self.p)
         
         @jax.jit
         def matmul(a,b):
-            return pmatmul(a,b, self.p)
+            return matmulmod(a,b, self.p)
         
         # V is the vector of subleading coefficients of the Conway polynomial.
         V = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
@@ -382,101 +382,101 @@ class array:
         return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
 
     def __neg__(self):
-        return array(pneg(self.REP, self.field.p), dtype = self.field, lifted = True)
+        return array(negmod(self.REP, self.field.p), dtype = self.field, lifted = True)
     
     def __add__(self, a):
         if type(a) == int:
-            b = jax.vmap(padd, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
+            b = jax.vmap(addmod, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape == self.shape:
-            return array(padd(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
+            return array(addmod(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
         if a.shape[0] == 1:
             if a.shape[-1]*a.shape[-2] == 1:
-                b = jax.vmap(padd, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
+                b = jax.vmap(addmod, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(padd, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(addmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
             return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
-                b = jax.vmap(padd, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
+                b = jax.vmap(addmod, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
                 return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(padd, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), ravel(self.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(addmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), ravel(self.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape[-1]*a.shape[-2] == 1:
-            b = jax.vmap(jax.vmap(padd, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(addmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-        b = jax.vmap(jax.vmap(padd, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), self.REP, self.field.p)
+        b = jax.vmap(jax.vmap(addmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), self.REP, self.field.p)
         return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
 
     def __radd__(self, a):
         if type(a) == int:
-            b = jax.vmap(padd, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
+            b = jax.vmap(addmod, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
  
     def __sub__(self, a):
         if type(a) == int:
-            b = jax.vmap(psub, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
+            b = jax.vmap(submod, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape == self.shape:
-            return array(psub(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
+            return array(submod(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
         if a.shape[0] == 1:
             if a.shape[-1]*a.shape[-2] == 1:
-                b = jax.vmap(psub, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
+                b = jax.vmap(submod, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(psub, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(submod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
             return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
-                b = jax.vmap(psub, in_axes = (None,0,None))(self.REP, ravel(a.REP, self.field), self.field.p)
+                b = jax.vmap(submod, in_axes = (None,0,None))(self.REP, ravel(a.REP, self.field), self.field.p)
                 return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(psub, in_axes = (None,0,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(submod, in_axes = (None,0,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape[-1]*a.shape[-2] == 1:
-            b = jax.vmap(jax.vmap(psub, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(submod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-        b = jax.vmap(jax.vmap(psub, in_axes = (None,0,None)), in_axes = (0,0,None))(self.REP, ravel(a.REP, self.field), self.field.p)
+        b = jax.vmap(jax.vmap(submod, in_axes = (None,0,None)), in_axes = (0,0,None))(self.REP, ravel(a.REP, self.field), self.field.p)
         return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
 
     def __rsub__(self, a):
         if type(a) == int:
-            b = jax.vmap(psub, in_axes = (None,0,None))(lift(a, self.field), ravel(self.REP, self.field), self.field.p)
+            b = jax.vmap(submod, in_axes = (None,0,None))(lift(a, self.field), ravel(self.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
 
     def __mul__(self, a):
         if type(a) == int:
-            b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
+            b = jax.vmap(matmulmod, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape == self.shape:
-            b = jax.vmap(pmatmul, in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(matmulmod, in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
         if a.shape[0] == 1:
             if a.shape[-1]*a.shape[-2] == 1:
-                b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
+                b = jax.vmap(matmulmod, in_axes = (0,None,None))(ravel(self.REP, self.field), a.REP, self.field.p)
                 return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(pmatmul, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(matmulmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             SHAPE = jax.numpy.broadcast_shapes(self.shape, a.shape)
             return array(unravel(b, self.field, (SHAPE[0],SHAPE[1]*self.field.n,SHAPE[2]*self.field.n)), dtype = self.field, lifted = True)
         if self.shape[0] == 1:
             if self.shape[-1]*self.shape[-2] == 1:
-                b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
+                b = jax.vmap(matmulmod, in_axes = (0,None,None))(ravel(a.REP, self.field), self.REP, self.field.p)
                 return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
-            b = jax.vmap(jax.vmap(pmatmul, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), ravel(self.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(matmulmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), ravel(self.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
         if a.shape[-1]*a.shape[-2] == 1:
-            b = jax.vmap(jax.vmap(pmatmul, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
+            b = jax.vmap(jax.vmap(matmulmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(self.REP, self.field), ravel(a.REP, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
-        b = jax.vmap(jax.vmap(pmatmul, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), self.REP, self.field.p)
+        b = jax.vmap(jax.vmap(matmulmod, in_axes = (0,None,None)), in_axes = (0,0,None))(ravel(a.REP, self.field), self.REP, self.field.p)
         return array(unravel(b, self.field, a.REP.shape), dtype = self.field, lifted = True)
 
     def __rmul__(self, a):
         if type(a) == int:
-            b = jax.vmap(pmatmul, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
+            b = jax.vmap(matmulmod, in_axes = (0,None,None))(ravel(self.REP, self.field), lift(a, self.field), self.field.p)
             return array(unravel(b, self.field, self.REP.shape), dtype = self.field, lifted = True)
     
     def __matmul__(self, a):
-        return array(pmatmul(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
+        return array(matmulmod(self.REP, a.REP, self.field.p), dtype = self.field, lifted = True)
 
     def lift(self):
         return self.REP
