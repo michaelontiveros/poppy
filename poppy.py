@@ -60,7 +60,7 @@ def tracemod(a,p):
 
 @jax.jit
 def mtrsm(a,b,p): # Triangular solve mod p.
-    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c).
+    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape r c.
     def mtrsm_vmap(bb): # bb is the matrix b.
         def mtrsm_scan(bc): # bc is a column of bb.
             def f(x,j):
@@ -131,10 +131,10 @@ def invmod_vmap(a, inv, b): # Matrix inverse mod p.
 
 @jax.jit
 def ftrsm(a,b,p): # Triangular solve over a finite field.
-    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape (r,c,n,n).
-    ZERO = jax.numpy.zeros((b.shape[-1],b.shape[-1]), dtype = DTYPE) # b has shape (c,d,n,n).
+    R = jax.numpy.arange(len(a), dtype = DTYPE) # a has shape r c n n.
+    ZERO = jax.numpy.zeros((b.shape[-1],b.shape[-1]), dtype = DTYPE) # b has shape c d n n.
     def ftrsm_vmap(bb): # bb is the array b.
-        def ftrsm_scan(bc): # bc has shape (c,n,n). it is a column of bb.
+        def ftrsm_scan(bc): # bc has shape c n n. it is a column of bb.
             def f(x,j):
                 x = x.at[j].set((bc[j] - jax.numpy.tensordot(a[j], x, axes = ([0,2],[0,1]))) % p)
                 return x, x[j]  
@@ -150,7 +150,7 @@ def fgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
     J = jax.numpy.arange(a.shape[1])
     R = jax.numpy.arange(min(len(I),len(J)))
     def f(ap, i):
-        a, perm, parity = ap # a has shape (r,c,n,n). perm has shape (r,). parity has shape (1,).
+        a, perm, parity = ap # a has shape r c n n. perm has shape r. parity has shape 1.
         ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
         j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
         a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
@@ -171,7 +171,7 @@ def fgetrf(a, inv, b): # Blocked lu decompposition over a finite field.
     parity = jax.numpy.zeros(1, dtype = DTYPE)
     for i in range(0, m, b):
         bb = min(m-i, b)
-        ai, permi, pari = fgetrf2((a[i:,i:i+bb,:,:], R[i:], 0), inv) # a has shape (r-i,bb,n,n). pi has shape (r-i,)
+        ai, permi, pari = fgetrf2((a[i:,i:i+bb,:,:], R[i:], 0), inv) # a has shape r-i bb n n. R has shape r-i.
         parity = (parity + pari) % 2
         perm = perm.at[i:].set(perm[permi])
         a = a.at[i:,:,:,:].set(a[permi,:,:,:]) # Swap rows.
@@ -218,17 +218,14 @@ class field:
         return f'field {self.q}'
      
     def inv(self):
-        
         @jax.jit
         def mul(a,b):
             return mulmod(a, b, self.p)
-        
         @functools.partial(jax.jit, static_argnums = 1)
         def inv_jit(ABC, i):
             C = mul(ABC[i-2, 0], ABC[i-2, 2])
             ABC = ABC.at[i-1, 2].set(C)   
             return ABC, mul(ABC[i-1, 1], C)
-        
         @jax.jit
         def inv_scan():    
             A = jax.numpy.arange(1, self.p, dtype = DTYPE)
@@ -237,24 +234,19 @@ class field:
             C = jax.numpy.ones(self.p - 1, dtype = DTYPE).at[0].set(self.p - 1)
             ABC = jax.numpy.vstack([A,B,C]).T       
             return jax.numpy.concatenate([jax.numpy.zeros(1, dtype = DTYPE), jax.lax.scan(inv_jit, ABC, A)[1]])
-        
         return inv_scan()
    
     def basis(self):
-
         @jax.jit
         def id(a,i):
             return a
         stack = jax.vmap(id, (None,0))
-        
         @jax.jit
         def neg(a):
             return negmod(a, self.p)
-        
         @jax.jit
         def matmul(a,b):
             return matmulmod(a,b, self.p)
-        
         # V is the vector of subleading coefficients of the irreducible polynomial.
         V = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         # M is a matrix root of the irreducible polynomial.
@@ -262,7 +254,6 @@ class field:
         # B is the array of powers of M.
         B = jax.lax.associative_scan(matmul, stack(M,jax.numpy.arange(self.n, dtype = DTYPE)).at[0].set(jax.numpy.eye(self.n, dtype = DTYPE)))
         return B
-
   
     def dual(self):
         A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
@@ -483,13 +474,11 @@ def decode(x,q): # x is nonnegative and q < 256.
 # BEGIN GROUPS
 
 def gl2(f): # The general linear group GL_2( F ).
-
+    assert f.q < 256
     @jax.jit
     def det(x):
         a = int2mat(decode(x,f.q),f)
         return mat2int((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
-
-    assert f.q < 256
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where(m2d > 0, m2c, 0))[0]
@@ -499,13 +488,11 @@ def gl2(f): # The general linear group GL_2( F ).
     return gl2c, idx
 
 def sl2(f): # The special linear group SL_2( F ).
-
+    assert f.q < 256
     @jax.jit
     def det(x):
         a = int2mat(decode(x,f.q),f)
         return mat2int((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
-
-    assert f.q < 256
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c).squeeze()
     i = jax.numpy.nonzero(jax.numpy.where(m2d == 1, m2c, 0))[0]
@@ -516,18 +503,15 @@ def sl2(f): # The special linear group SL_2( F ).
 
 def pgl2(f): # The projective general linear group PGL_2( F ).
     assert f.q < 256
-
     @jax.jit
     def det(x):
         a = int2mat(decode(x,f.q),f)
         return mat2int((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
-
     @jax.jit
     def normed(x):
         A = decode(x,f.q)[0]
         a, b = A[0,0], A[0,1]
         return (a == 1) | ((a == 0) & (b == 1))
-
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c).squeeze()
     m2n = jax.vmap(normed)(m2c).squeeze()
@@ -539,18 +523,15 @@ def pgl2(f): # The projective general linear group PGL_2( F ).
 
 def pgl2mod(q): # The projective general linear group PGL_2( Z/q ).
     assert q < 256
-
     @jax.jit
     def det(x):
         a = decode(x,q)[0]
         return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
-
     @jax.jit
     def normed(x):
         A = decode(x,q)[0]
         a, b = A[0,0], A[0,1]
         return (a == 1) | ((a == 0) & (b == 1))
-
     m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c)
     m2n = jax.vmap(normed)(m2c)
@@ -564,18 +545,15 @@ def psl2(f): # The projective special linear group PSL_2( F ).
     assert f.q < 256
     if f.p == 2:
         return pgl2(f)
-
     @jax.jit
     def det(x):
         a = int2mat(decode(x,f.q),f)
         return mat2int((a[:,0,0,:,:]@a[:,1,1,:,:]-a[:,0,1,:,:]@a[:,1,0,:,:])%f.p,f).ravel()
-
     @jax.jit
     def normed(x):
         A = decode(x,f.q)[0]
         a,b = A[0,0], A[0,1]
         return ((a != 0) & (a < f.q/2)) | ((a == 0) & (b < f.q/2))
-
     m2c = jax.numpy.arange(f.q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c).squeeze()
     m2n = jax.vmap(normed)(m2c).squeeze()
@@ -589,18 +567,15 @@ def psl2mod(q): # The projective special linear group PSL_2( Z/q ).
     assert q < 256
     if q == 2:
         return pgl2mod(q)
-
     @jax.jit
     def det(x):
         a = decode(x,q)[0]
         return (a[0,0]*a[1,1]-a[0,1]*a[1,0])%q
-
     @jax.jit
     def normed(x):
         A = decode(x,q)[0]
         a, b = A[0,0], A[0,1]
         return ((a != 0) & (a < q/2)) | ((a == 0) & (b < q/2))
-
     m2c = jax.numpy.arange(q**4, dtype = jax.numpy.uint32)
     m2d = jax.vmap(det)(m2c)
     m2n = jax.vmap(normed)(m2c)
@@ -659,8 +634,8 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
     def normpsl(A):
         a, b = A[0,0], A[0,1]
         sa = jax.numpy.sign(a)
-        sqa = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(a, jax.numpy.float64)), jax.numpy.int64)
-        sqb = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(b, jax.numpy.float64)), jax.numpy.int64)
+        sqa = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(a, jax.numpy.float64)), DTYPE)
+        sqb = jax.numpy.astype(jax.numpy.sign((q/2)-jax.numpy.astype(b, jax.numpy.float64)), DTYPE)
         s = sa*sqa + (1-sa)*sqb
         return (s*A)%q
 
