@@ -302,16 +302,6 @@ def block(a,f):
     n = f.n 
     return a.reshape(s[:-2] + (s[-2]//n, n, s[-1]//n, n)).swapaxes(-2, -3)
 
-@functools.partial(jax.jit, static_argnums = 1)
-def ravel(a,f): 
-    n = f.n
-    return block(a,f).reshape((len(a), -1, n, n))
-
-@functools.partial(jax.jit, static_argnums = (1,2))
-def unravel(i,f,s):   
-    n = f.n    
-    return i.reshape(s[:-2] + (s[-2]//n, s[-1]//n, n, n)).swapaxes(-2, -3).reshape(s)
-
 # END RESHAPE
 # BEGIN LIFT/PROJECT
 
