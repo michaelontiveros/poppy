@@ -213,7 +213,7 @@ class field:
         self.q = p ** n if n*jax.numpy.log2(p) < 63 else None
         self.INV = self.inv() if inv else None # Multiplicative inverse mod p.
         self.BASIS = self.basis()     # Powers of the Conway matrix.
-        self.DUALBASIS = self.dualbasis()
+        self.DUAL = self.dual()
 
     def __repr__(self):
         return f'field {self.q}'
@@ -265,7 +265,7 @@ class field:
         return X
 
   
-    def dualbasis(self):
+    def dual(self):
         A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         R = self.BASIS[1]
         Ri = invmod(R,self.INV,32)
