@@ -23,7 +23,7 @@ of the matrix algebra `M_k( F )`. A matrix `mod p` is a `jax.numpy.int64` array 
 
 `q = 12421^3`.
  
-`a`, `b` are random `222 x 222` matrices over `F`.
+`a,b` are random `222 x 222` matrices over `F`.
 
 `c` is a random number in `F`.
 
