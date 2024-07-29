@@ -21,6 +21,9 @@ p30 = 999999733
 POLYNOMIAL[p22] = {}
 POLYNOMIAL[p30] = {}
 
+# Linear algebra subroutines are blocked.
+BLOCKSIZE = 32
+
 # The pseudo random number generator has a default seed.
 SEED = 0 
 
@@ -155,7 +158,7 @@ def fgetrf2(aperm, inv): # Sequential lu decomposition over a finite field.
         j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
         a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
         perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
-        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,None,None] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod(a[i,i,:,:], inv, 32), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
+        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,None,None] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod(a[i,i,:,:], inv, BLOCKSIZE), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
         a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
         parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
         return (a, perm, parity), j
@@ -258,14 +261,14 @@ class field:
     def dual(self):
         A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         R = self.BASIS[1]
-        Ri = invmod(R,self.INV,32)
+        Ri = invmod(R, self.INV, BLOCKSIZE)
         DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
         def dualscan(b,i):
             b = b.at[i].set((Ri@b[i-1]-Ri*A[i])%self.p)
             return b, b[i]
         DD = jax.lax.scan(dualscan,DD,jax.numpy.arange(1,self.n))[0]
         C = jax.numpy.tensordot(DD,self.BASIS,axes = ([0,2],[0,1]))%self.p
-        Ci = invmod(C,self.INV,32)
+        Ci = invmod(C, self.INV, BLOCKSIZE)
         D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
         return D   
 
@@ -391,19 +394,23 @@ class array:
         return self.new(jax.numpy.trace(self.VEC, axis1 = 1, axis2 = 2)%self.field.p)
 
     def det(self):
-        return self.new(mat2vec(fdet_vmap(vec2mat(self.VEC, self.field), self.field.INV, self.field.p, 32)))
+        return self.new(mat2vec(fdet_vmap(vec2mat(self.VEC, self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def lu(self):
-        return mgetrf_vmap(vec2mat(self.VEC, self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, 32)
+        return mgetrf_vmap(vec2mat(self.VEC, self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
 
     def lu_block(self):
-        return fgetrf_vmap(vec2mat(self.VEC, self.field), self.field.INV, 32)
+        return fgetrf_vmap(vec2mat(self.VEC, self.field), self.field.INV, BLOCKSIZE)
 
     def inv(self):
-        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.VEC, self.field), self.field), self.field.INV, 32),self.field)))
+        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.VEC, self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
 
     def rank(self):
-        return jax.numpy.count_nonzero(self.lu()[2], axis = 1)
+        @jax.jit
+        def unique(a):
+            return jax.numpy.unique(a, size = self.shape[1], fill_value = -1)
+        unique_vmap = jax.vmap(unique)
+        return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
 def flatten_array(a):
     children = (a.shape, a.VEC)
@@ -436,7 +443,7 @@ def random(shape, f, s = SEED):
 
 def plot(a, title = '', size = 6, cmap = 'twilight_shifted'):
     matplotlib.rc('figure', figsize=(size,size))
-    matplotlib.pyplot.matshow(a.reshape((-1,a.shape[-1])).T, cmap = cmap, interpolation = 'none')
+    matplotlib.pyplot.matshow(a.reshape((a.shape[0],-1)), cmap = cmap, interpolation = 'none')
     matplotlib.pyplot.title(title)
     matplotlib.pyplot.show()
 
