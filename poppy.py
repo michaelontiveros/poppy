@@ -192,7 +192,7 @@ def getrf(a, inv, b): # Blocked lu decompposition over a finite field.
 getrf_vmap = jax.vmap(getrf, in_axes = (0, None, None))
 
 @jax.jit
-def gje2_batch(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
+def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
     a, piv = apiv
     p = 1+inv[-1] # p is prime.
     B = jax.numpy.ones(a.shape[0], dtype = DTYPE)
@@ -201,20 +201,18 @@ def gje2_batch(apiv, inv): # Sequential Gauss-Jordan elimination over a finite f
     R = jax.numpy.arange(min(len(I),len(J)))
     def swap(b,i,j):
         return b.at[[i,j],:,:,:].set(b[[j,i],:,:,:])
-    def swap_batch(b,i,j):
+    def swap_vmap(b,i,j):
         return jax.vmap(swap, in_axes = (0,None,0))(b,i,j)
-    def set(b,i,j,s):
+    def sign(b,i,j,s):
         return b.at[i].set(jax.numpy.sign(s[j]))
-    def set_batch(b,i,j,s):
-        return jax.vmap(set, in_axes = (0,None,0,0))(b,i,j,s)
+    def sign_vmap(b,i,j,s):
+        return jax.vmap(sign, in_axes = (0,None,0,0))(b,i,j,s)
     def f(ap, i):
         a, piv = ap # a has shape b r c n n. piv has shape b c.
         ai = a[:,:,i[0],:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2)
         j = jax.numpy.argmax(jax.numpy.where(I[None,:] >= i[0], ai, -1), axis = 1) # Search column i for j.
-        a = swap_batch(a,i[0],j)
-        #a = a.at[:,[i*B,j],:,:,:].set(a[:,[j,i*B],:,:,:]) # Swap rows i and j.
-        piv = set_batch(piv,i[0],j,ai)
-        #piv = piv.at[:,i[0]].set(jax.numpy.sign(ai[:,j])) # Record swap.
+        a = swap_vmap(a,i[0],j) # Swap rows i j.
+        piv = sign_vmap(piv,i[0],j,ai) # Identify pivots.
         d = jax.numpy.where(piv[:,i[0],None,None] != 0, a[:,i[0],i[0],:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
         a = a.at[:,i[0],:,:,:].set(jax.numpy.einsum('ijkl,ilm->ijkm', a[:,i[0],:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
         a = a.at[:,:,:,:,:].set((a[:,:,:,:,:] - jax.numpy.where((I[None,:,None,None,None] != i[0]) & (J[None,None,:,None,None] >= i[0]), jax.numpy.einsum('ijkl,imln->ijmkn',a[:,:,i[0],:,:], a[:,i[0],:,:,:]), 0)) % p) # Update block D.    
@@ -226,14 +224,14 @@ def gje2_batch(apiv, inv): # Sequential Gauss-Jordan elimination over a finite f
         rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
         return perm,rank,rref
     perm,rank,rref = jax.vmap(g)(a,piv)
-    return rref,piv,perm,rank
+    return piv,perm,rank,rref
 
 @jax.jit
-def kerim_batch(a,f): # Matrix kernel and image over a finite field.
+def kerim(a,f): # Matrix kernel and image over a finite field.
     b,r,c,n,_=a.shape
     m = min(r,c)
     apiv = (a, jax.numpy.zeros((b,c), dtype = DTYPE))
-    rref,piv,perm,rank = gje2_batch(apiv, f.INV)
+    piv,perm,rank,rref = gje2(apiv,f.INV)
     Rm = jax.numpy.arange(m)
     Rn = jax.numpy.arange(n)
     ker = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
@@ -247,38 +245,6 @@ def kerim_batch(a,f): # Matrix kernel and image over a finite field.
     iim = jax.vmap(swap)(iim,perm)
     im = jax.numpy.einsum('ijklm,iknmt->ijnlt',a,iim)%f.p
     return ker,im,rank
-
-@jax.jit
-def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
-    a, piv = apiv
-    p = 1+inv[-1] # p is prime.
-    I = jax.numpy.arange(a.shape[0])
-    J = jax.numpy.arange(a.shape[1])
-    R = jax.numpy.arange(min(len(I),len(J)))
-    def f(ap, i):
-        a, piv = ap # a has shape r c n n. piv has shape r.
-        ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
-        j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
-        a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
-        piv = piv.at[i].set(jax.numpy.sign(ai[j])) # Record swap.
-        c = jax.lax.select(piv[i] != 0, a[i,i,:,:], jax.numpy.eye(a.shape[2],dtype = DTYPE))
-        a = a.at[i,:,:,:].set(jax.numpy.tensordot(a[i,:,:,:], invmod(c, inv, BLOCKSIZE), axes = (2,0)))%p # Scale row i.
-        a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] != i) & (J[None,:,None,None] >= i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
-        return (a, piv), j
-    a,piv = jax.lax.scan(f, apiv, R, unroll = False)[0]
-    perm = jax.numpy.argsort(piv, axis = 0, descending = True)
-    rank = jax.numpy.sum(piv)
-    rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
-    return rref,piv,perm,rank
-
-@functools.partial(jax.jit, static_argnums = (2,))
-def kerim(a, f, n): # Matrix kernel and image over a finite field.
-    apiv = (a, jax.numpy.zeros(a.shape[1], dtype = DTYPE))
-    rref,piv,perm,rank = gje2(apiv, f.INV)
-    m = min(a.shape[0],a.shape[1])
-    ker = jax.numpy.vstack([-rref[:rank,rank:m,:,:], block(jax.numpy.eye(n*(a.shape[1]-rank),n*(m-rank), dtype = DTYPE),f)])%f.p
-    im = jax.numpy.vstack([block(jax.numpy.eye(f.n*rank, dtype = DTYPE),f), jax.numpy.zeros((a.shape[1]-rank,rank,f.n,f.n), dtype = DTYPE)])
-    return ker[perm],im[perm]
 
 def fdet(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
@@ -502,7 +468,7 @@ class array:
         return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
-        k,i,rank = kerim_batch(self.lift(),self.field)
+        k,i,rank = kerim(self.lift(),self.field)
         ker = self.new(mat2vec(k))
         im = self.new(mat2vec(i))
         return ker,im
@@ -512,6 +478,12 @@ class array:
 
     def im(self):
         return self.kerim()[1]
+
+    def mod(self,b):
+        ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
+        piv = jax.numpy.zeros((self.shape[0],self.shape[2]+b.shape[2]), dtype = DTYPE)
+        piv,_,_,_ = gje2((ba,piv),self.field.INV)
+        return self.new(mat2vec(piv[:,None,b.shape[2]:,None,None]*self.lift()))
 
 def flatten_array(a):
     children = (a.shape, a.vec)
