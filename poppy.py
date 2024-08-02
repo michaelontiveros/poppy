@@ -366,12 +366,12 @@ class field:
         return (-jax.numpy.ones(self.p, dtype = DTYPE)).at[(R*R) % self.p].set(1).at[0].set(0)
 
 def flatten_field(f):
-    children = (f.BASIS, f.INV)
+    children = (f.BASIS, f.DUAL, f.INV)
     aux_data = (f.p, f.n, f.q)
     return (children, aux_data)
 def unflatten_field(aux_data, children):
     f = object.__new__(field)
-    f.BASIS, f.INV = children
+    f.BASIS, f.DUAL, f.INV = children
     f.p, f.n, f.q = aux_data
     return f
 jax.tree_util.register_pytree_node(field, flatten_field, unflatten_field)
@@ -435,64 +435,64 @@ class array:
             return
         self.field = dtype 
         self.shape = a.shape
-        self.VEC = int2vec(a, self.field)
+        self.vec = int2vec(a, self.field)
 
-    def new(self,vec):
+    def new(self,v):
         a = object.__new__(array)
         a.field = self.field
-        a.shape = vec.shape[:-1]
-        a.VEC = vec
+        a.shape = v.shape[:-1]
+        a.vec = v
         return a
 
     def __repr__(self):
         return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
 
     def __neg__(self):
-        return self.new(negmod(self.VEC, self.field.p))
+        return self.new(negmod(self.vec, self.field.p))
     
     def __add__(self, a):
         a = array(a,self.field) if type(a) == int else a
-        return self.new(addmod(self.VEC, a.VEC, self.field.p))
+        return self.new(addmod(self.vec, a.vec, self.field.p))
     def __radd__(self, a):
         return self.__add__(a)
  
     def __sub__(self, a):
         a = array(a,self.field) if type(a) == int else a
-        return self.new(submod(self.VEC, a.VEC, self.field.p))
+        return self.new(submod(self.vec, a.vec, self.field.p))
     def __rsub__(self, a):
         return self.__sub__(a)
     
     def __mul__(self, a):
         a = array(a,self.field) if type(a) == int else a
-        return self.new((jax.numpy.expand_dims(self.VEC,3)@vec2mat(a.VEC,a.field))[:,:,:,0,:]%self.field.p)
+        return self.new((jax.numpy.expand_dims(self.vec,3)@vec2mat(a.vec,a.field))[:,:,:,0,:]%self.field.p)
     def __rmul__(self, a):
         return self.__mul__(a)
     
     def __matmul__(self, a):
         def matmul(b,c):
             return jax.numpy.tensordot(b,vec2mat(c,self.field), axes = ([1,2],[0,2]))%self.field.p
-        return self.new(jax.vmap(matmul)(self.VEC, a.VEC))
+        return self.new(jax.vmap(matmul)(self.vec, a.vec))
 
     def lift(self):
-        return vec2mat(self.VEC, self.field)
+        return vec2mat(self.vec, self.field)
 
     def proj(self):
-        return vec2int(self.VEC, self.field)
+        return vec2int(self.vec, self.field)
 
     def trace(self):  
-        return self.new(jax.numpy.trace(self.VEC, axis1 = 1, axis2 = 2)%self.field.p)
+        return self.new(jax.numpy.trace(self.vec, axis1 = 1, axis2 = 2)%self.field.p)
 
     def det(self):
-        return self.new(mat2vec(fdet_vmap(vec2mat(self.VEC, self.field), self.field.INV, self.field.p, BLOCKSIZE)))
+        return self.new(mat2vec(fdet_vmap(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def lu(self):
-        return mgetrf_vmap(vec2mat(self.VEC, self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
+        return mgetrf_vmap(vec2mat(self.vec,self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
 
     def lu_block(self):
-        return getrf_vmap(vec2mat(self.VEC, self.field), self.field.INV, BLOCKSIZE)
+        return getrf_vmap(vec2mat(self.vec, self.field), self.field.INV, BLOCKSIZE)
 
     def inv(self):
-        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.VEC, self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
+        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.vec,self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
 
     def rank(self):
         @jax.jit
@@ -502,18 +502,24 @@ class array:
         return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
-        k,i,r = kerim_batch(self.lift(),self.field)
+        k,i,rank = kerim_batch(self.lift(),self.field)
         ker = self.new(mat2vec(k))
         im = self.new(mat2vec(i))
         return ker,im
 
+    def ker(self):
+        return self.kerim()[0]
+
+    def im(self):
+        return self.kerim()[1]
+
 def flatten_array(a):
-    children = (a.shape, a.VEC)
+    children = (a.shape, a.vec)
     aux_data = (a.field,)
     return (children, aux_data)
 def unflatten_array(aux_data, children):
     a = object.__new__(array)
-    a.shape, a.VEC = children
+    a.shape, a.vec = children
     a.field, = aux_data
     return a
 jax.tree_util.register_pytree_node(array, flatten_array, unflatten_array)
@@ -530,7 +536,7 @@ def random(shape, f, s = SEED):
     b = object.__new__(array)
     b.field = f
     b.shape = SHAPE
-    b.VEC = a
+    b.vec = a
     return b
 
 # END RANDOM
