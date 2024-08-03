@@ -36,5 +36,3 @@ of the matrix algebra `M_k( F )`. A matrix `mod p` is a `jax.numpy.int64` array 
 | `a.lu()`  | ` 20 ms`  |
 | `a.inv()`  | ` 40 ms`  |
 | `a.det()`  | ` 50 ms`  |
-| `lps(139,103)` | `900 ms` |
-
