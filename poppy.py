@@ -149,20 +149,20 @@ def trsm(a,b,p): # Triangular solve over a finite field.
 def getrf2(aperm, inv): # Sequential lu decomposition over a finite field.
     a, perm, parity = aperm
     p = 1+inv[-1] # p is prime.
-    I = jax.numpy.arange(a.shape[0])
-    J = jax.numpy.arange(a.shape[1])
-    R = jax.numpy.arange(min(len(I),len(J)))
-    def f(ap, i):
+    I = jax.numpy.arange(a.shape[0]).reshape((-1,1,1,1))
+    J = jax.numpy.arange(a.shape[1]).reshape((1,-1,1,1))
+    R = jax.numpy.arange(min(a.shape[0],a.shape[1]))
+    def eliminate(ap, i):
         a, perm, parity = ap # a has shape r c n n. perm has shape r. parity has shape 1.
-        ai = a[:,i,:,:].reshape((len(I),-1)).max(axis = 1)
-        j = jax.numpy.argmax(jax.numpy.where(I >= i, ai, -1)) # Search column i for j.
+        ai = a[:,i,:,:].reshape((a.shape[0],-1)).max(axis = 1)
+        j = jax.numpy.argmax(jax.numpy.where(I[:,0,0,0] >= i, ai, -1)) # Search column i for j.
         a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
         perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
-        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,None,None] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod(a[i,i,:,:], inv, BLOCKSIZE), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
-        a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[:,None,None,None] > i) & (J[None,:,None,None] > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
+        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,:,:,0] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod(a[i,i,:,:], inv, BLOCKSIZE), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
+        a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I > i) & (J > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
         parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
         return (a, perm, parity), j
-    return jax.lax.scan(f, aperm, R, unroll = False)[0]
+    return jax.lax.scan(eliminate, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def getrf(a, inv, b): # Blocked lu decompposition over a finite field.
@@ -191,61 +191,6 @@ def getrf(a, inv, b): # Blocked lu decompposition over a finite field.
     return l, u, d, iperm, parity
 getrf_vmap = jax.vmap(getrf, in_axes = (0, None, None))
 
-@jax.jit
-def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
-    a, piv = apiv
-    p = 1+inv[-1] # p is prime.
-    B = jax.numpy.ones(a.shape[0], dtype = DTYPE)
-    I = jax.numpy.arange(a.shape[1])
-    J = jax.numpy.arange(a.shape[2])
-    R = jax.numpy.arange(min(len(I),len(J)))
-    def swap(b,i,j):
-        return b.at[[i,j],:,:,:].set(b[[j,i],:,:,:])
-    def swap_vmap(b,i,j):
-        return jax.vmap(swap, in_axes = (0,None,0))(b,i,j)
-    def sign(b,i,j,s):
-        return b.at[i].set(jax.numpy.sign(s[j]))
-    def sign_vmap(b,i,j,s):
-        return jax.vmap(sign, in_axes = (0,None,0,0))(b,i,j,s)
-    def f(ap, i):
-        a, piv = ap # a has shape b r c n n. piv has shape b c.
-        ai = a[:,:,i[0],:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2)
-        j = jax.numpy.argmax(jax.numpy.where(I[None,:] >= i[0], ai, -1), axis = 1) # Search column i for j.
-        a = swap_vmap(a,i[0],j) # Swap rows i j.
-        piv = sign_vmap(piv,i[0],j,ai) # Identify pivots.
-        d = jax.numpy.where(piv[:,i[0],None,None] != 0, a[:,i[0],i[0],:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
-        a = a.at[:,i[0],:,:,:].set(jax.numpy.einsum('ijkl,ilm->ijkm', a[:,i[0],:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
-        a = a.at[:,:,:,:,:].set((a[:,:,:,:,:] - jax.numpy.where((I[None,:,None,None,None] != i[0]) & (J[None,None,:,None,None] >= i[0]), jax.numpy.einsum('ijkl,imln->ijmkn',a[:,:,i[0],:,:], a[:,i[0],:,:,:]), 0)) % p) # Update block D.    
-        return (a, piv), j
-    a,piv = jax.lax.scan(f, apiv, R.reshape((-1,1)), unroll = False)[0]
-    def g(a,piv):
-        perm = jax.numpy.argsort(piv, axis = 0, descending = True)
-        rank = jax.numpy.sum(piv)
-        rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
-        return perm,rank,rref
-    perm,rank,rref = jax.vmap(g)(a,piv)
-    return piv,perm,rank,rref
-
-@jax.jit
-def kerim(a,f): # Matrix kernel and image over a finite field.
-    b,r,c,n,_=a.shape
-    m = min(r,c)
-    apiv = (a, jax.numpy.zeros((b,c), dtype = DTYPE))
-    piv,perm,rank,rref = gje2(apiv,f.INV)
-    Rm = jax.numpy.arange(m)
-    Rn = jax.numpy.arange(n)
-    ker = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
-    iim = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
-    ker = ker.at[:,:m,:m,:,:].set(jax.numpy.where((Rm[None,None,:,None,None] >= rank[:,None,None,None,None]), -rref[:,:m,:m,:,:], 0))%f.p
-    ker = ker.at[:,:m,:,:,:].set(jax.numpy.where((Rm[None,None,:,None,None] >= rank[:,None,None,None,None]) & (Rm[None,:,None,None,None] >= rank[:,None,None,None,None]) & (Rm[None,None,:,None,None] == Rm[None,:,None,None,None]) & (Rn[None,None,None,:,None] == Rn[None,None,None,None,:]), 1, ker[:,:m,:,:,:]))
-    iim = iim.at[:,:m,:m,:,:].set(jax.numpy.where((Rm[None,None,:,None,None]<rank[:,None,None,None,None])&(Rm[None,:,None,None,None]<rank[:,None,None,None,None]), rref[:,:m,:m,:,:],iim[:,:m,:m,:,:]))
-    def swap(ki,pm):
-        return ki[pm]
-    ker = jax.vmap(swap)(ker,perm)
-    iim = jax.vmap(swap)(iim,perm)
-    im = jax.numpy.einsum('ijklm,iknmt->ijnlt',a,iim)%f.p
-    return ker,im,rank
-
 def fdet(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
         return matmulmod(A,B,p)
@@ -259,6 +204,64 @@ def fdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
         l, u, d, iperm, parity = getrf(A, inv, b)
         return jax.numpy.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
     return jax.vmap(det)(a)
+
+@jax.jit
+def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
+    a, piv = apiv
+    p = 1+inv[-1] # p is prime.
+    B = jax.numpy.ones(a.shape[0], dtype = DTYPE)
+    I = jax.numpy.arange(a.shape[1]).reshape((1,-1,1,1,1))
+    J = jax.numpy.arange(a.shape[2]).reshape((1,1,-1,1,1))
+    R = jax.numpy.arange(min(a.shape[1],a.shape[2]))
+    def swap(b,i,j):
+        return b.at[[i,j],:,:,:].set(b[[j,i],:,:,:])
+    def swap_vmap(b,i,j):
+        return jax.vmap(swap, in_axes = (0,None,0))(b,i,j)
+    def sign(b,i,j,s):
+        return b.at[i].set(jax.numpy.sign(s[j]))
+    def sign_vmap(b,i,j,s):
+        return jax.vmap(sign, in_axes = (0,None,0,0))(b,i,j,s)
+    def eliminate(ap, i):
+        a, piv = ap # a has shape b r c n n. piv has shape b c.
+        ai = a[:,:,i,:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2)
+        j = jax.numpy.argmax(jax.numpy.where(I.reshape((1,-1)) >= i, ai, -1), axis = 1) # Search column i for j.
+        a = swap_vmap(a,i,j) # Swap rows i and j.
+        piv = sign_vmap(piv,i,j,ai) # Identify pivots.
+        d = jax.numpy.where(piv[:,i,None,None] != 0, a[:,i,i,:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
+        a = a.at[:,i,:,:,:].set(jax.numpy.einsum('ijkl,ilm->ijkm', a[:,i,:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
+        a = a.at[:,:,:,:,:].set((a[:,:,:,:,:] - jax.numpy.where((I != i) & (J >= i), jax.numpy.einsum('ijkl,imln->ijmkn',a[:,:,i,:,:], a[:,i,:,:,:]), 0)) % p) # Update block.    
+        return (a, piv), j
+    a,piv = jax.lax.scan(eliminate, apiv, R, unroll = False)[0]
+    def permute(a,piv):
+        perm = jax.numpy.argsort(piv, axis = 0, descending = True)
+        rank = jax.numpy.sum(piv)
+        rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
+        return perm,rank,rref
+    perm,rank,rref = jax.vmap(permute)(a,piv)
+    return piv,perm,rank,rref
+
+@jax.jit
+def kerim(a,f): # Matrix kernel and image over a finite field.
+    b,r,c,n,_=a.shape
+    m = min(r,c)
+    apiv = (a, jax.numpy.zeros((b,c), dtype = DTYPE))
+    piv,perm,rank,rref = gje2(apiv,f.INV)
+    rank =              rank.reshape((b,1,1,1,1))
+    Im = jax.numpy.arange(m).reshape((1,m,1,1,1))
+    Jm = jax.numpy.arange(m).reshape((1,1,m,1,1))
+    In = jax.numpy.arange(n).reshape((1,1,1,n,1))
+    Jn = jax.numpy.arange(n).reshape((1,1,1,1,n))
+    ker = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
+    iim = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
+    ker = ker.at[:,:m,:m,:,:].set(jax.numpy.where(Jm >= rank, -rref[:,:m,:m,:,:], 0))%f.p
+    ker = ker.at[:,:m,:,:,:].set(jax.numpy.where((Jm >= rank) & (Im == Jm) & (In == Jn), 1, ker[:,:m,:,:,:]))
+    iim = iim.at[:,:m,:m,:,:].set(jax.numpy.where((Im < rank) & (Jm < rank), rref[:,:m,:m,:,:],iim[:,:m,:m,:,:]))
+    def swap(ki,pm):
+        return ki[pm]
+    ker = jax.vmap(swap)(ker,perm)
+    iim = jax.vmap(swap)(iim,perm)
+    im = jax.numpy.einsum('ijklm,iknmt->ijnlt',a,iim)%f.p
+    return ker,im,rank
 
 # END LINEAR ALGEBRA
 # BEGIN FIELD
@@ -387,7 +390,7 @@ def mat2int(m,f):
 # BEGIN ARRAY
 
 class array:
-    def __init__(self, a, dtype):
+    def __init__(self, a, field):
         if type(a) == int:
             a = jax.numpy.array([a], dtype = DTYPE)
         elif type(a) == list:
@@ -399,7 +402,7 @@ class array:
         elif len(a.shape) > 3:
             print('ERROR: poppy arrays are three dimensional.')
             return
-        self.field = dtype 
+        self.field = field 
         self.shape = a.shape
         self.vec = int2vec(a, self.field)
 
@@ -497,19 +500,31 @@ def unflatten_array(aux_data, children):
 jax.tree_util.register_pytree_node(array, flatten_array, unflatten_array)
 
 # END ARRAY
+# BEGIN NAMED ARRAYS
+
+def zeros(shape,field):
+    return array(jax.numpy.zeros(shape, dtype = DTYPE), field)
+
+def ones(shape,field):
+    return array(jax.numpy.ones(shape, dtype = DTYPE), field)
+
+def eye(shape,field):
+    return array(jax.numpy.eye(shape, dtype = DTYPE), field)
+
+# END NAMED ARRAYS 
 # BEGIN RANDOM
 
-def key(s = SEED):
-    return jax.random.key(s)
+def key(seed = SEED):
+    return jax.random.key(seed)
 
-def random(shape, f, s = SEED): 
+def random(shape, field, seed = SEED): 
     SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
-    a = jax.random.randint(key(s), SHAPE+(f.n,), 0, f.p, dtype = DTYPE)
-    b = object.__new__(array)
-    b.field = f
-    b.shape = SHAPE
-    b.vec = a
-    return b
+    r = jax.random.randint(key(seed), SHAPE+(field.n,), 0, field.p, dtype = DTYPE)
+    a = object.__new__(array)
+    a.field = field
+    a.shape = SHAPE
+    a.vec = r
+    return a
 
 # END RANDOM
 # BEGIN PLOT
