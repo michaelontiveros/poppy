@@ -488,6 +488,9 @@ class array:
         piv,_,_,_ = gje2((ba,piv),self.field.INV)
         return self.new(mat2vec(piv[:,None,b.shape[2]:,None,None]*self.lift()))
 
+    def transpose(self):
+        return self.new(self.vec.swapaxes(1,2))
+
 def flatten_array(a):
     children = (a.shape, a.vec)
     aux_data = (a.field,)
