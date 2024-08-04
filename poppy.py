@@ -268,9 +268,9 @@ def kerim(a,f): # Matrix kernel and image over a finite field.
 
 class field:
     def __init__(self, p, n, inv = True):    
-        self.p = p
-        self.n = n
-        self.q = p**n if n*jax.numpy.log2(p) < 63 else None
+        self.p = p # Field characteristic.
+        self.n = n # Field degree.
+        self.q = p**n if n*jax.numpy.log2(p) < 63 else None # Field order.
         self.INV = self.inv() if inv else None # Multiplicative inverse mod p.
         self.BASIS = self.basis() # Power basis.
         self.DUAL = self.dual()   # Dual basis.
@@ -471,10 +471,13 @@ class array:
         return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
-        k,i,rank = kerim(self.lift(),self.field)
-        ker = self.new(mat2vec(k))
-        im = self.new(mat2vec(i))
-        return ker,im
+        @jax.jit
+        def kerim_jit():    
+            k,i,rank = kerim(self.lift(),self.field)
+            ker = self.new(mat2vec(k))
+            im = self.new(mat2vec(i))
+            return ker,im
+        return kerim_jit()
 
     def ker(self):
         return self.kerim()[0]
@@ -484,21 +487,45 @@ class array:
 
     def mod(self,b):
         ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
-        piv = jax.numpy.zeros((self.shape[0],self.shape[2]+b.shape[2]), dtype = DTYPE)
+        piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
+        #piv = jax.numpy.zeros((self.shape[0],self.shape[2]+b.shape[2]), dtype = DTYPE)
         piv,_,_,_ = gje2((ba,piv),self.field.INV)
-        return self.new(mat2vec(piv[:,None,b.shape[2]:,None,None]*self.lift()))
+        return self.new(mat2vec(piv[:,None,-self.shape[2]:,None,None]*self.lift()))
+
+    def rankmod(self,b):
+        ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
+        piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
+        piv,_,_,_ = gje2((ba,piv),self.field.INV)
+        return jax.numpy.sum(piv[:,-self.shape[2]:], axis = 1)
 
     def transpose(self):
         return self.new(self.vec.swapaxes(1,2))
 
+    def is_zero(self):
+        def thread(a):
+            return jax.numpy.count_nonzero(a) == 0
+        zero = jax.vmap(thread)(self.vec)
+        return zero
+
+    def direct_sum(self,d):
+        b = jax.numpy.zeros((self.shape[0],self.shape[1],d.shape[2],self.field.n), dtype = DTYPE)
+        c = jax.numpy.zeros((self.shape[0],d.shape[1],self.shape[2],self.field.n), dtype = DTYPE)
+        top = jax.numpy.concatenate([self.vec,b], axis = 2)
+        bot = jax.numpy.concatenate([c,d.vec], axis = 2)
+        return self.new(jax.numpy.concatenate([top,bot],axis = 1))
+    
+    def direct_prod(self,b):
+        return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
+
 def flatten_array(a):
-    children = (a.shape, a.vec)
-    aux_data = (a.field,)
+    children = (a.vec, a.field)
+    aux_data = (a.shape,)
+    #aux_data = ()
     return (children, aux_data)
 def unflatten_array(aux_data, children):
     a = object.__new__(array)
-    a.shape, a.vec = children
-    a.field, = aux_data
+    a.vec, a.field = children
+    a.shape, = aux_data
     return a
 jax.tree_util.register_pytree_node(array, flatten_array, unflatten_array)
 
