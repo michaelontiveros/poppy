@@ -209,35 +209,50 @@ def fdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
 def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
     a, piv = apiv
     p = 1+inv[-1] # p is prime.
-    B = jax.numpy.ones(a.shape[0], dtype = DTYPE)
     I = jax.numpy.arange(a.shape[1]).reshape((1,-1,1,1,1))
     J = jax.numpy.arange(a.shape[2]).reshape((1,1,-1,1,1))
-    R = jax.numpy.arange(min(a.shape[1],a.shape[2]))
+    #R = jax.numpy.arange(min(a.shape[1],a.shape[2]))
+    def findpiv(pv,j):
+        i = a.shape[2]-jax.numpy.argmax(jax.numpy.flip(jax.numpy.sign(pv)))
+        i = jax.numpy.where(i==a.shape[2], 0,i)
+        i = jax.numpy.where(i>=a.shape[1], a.shape[1]-1,i)
+        return i
     def swap(b,i,j):
         return b.at[[i,j],:,:,:].set(b[[j,i],:,:,:])
-    def swap_vmap(b,i,j):
-        return jax.vmap(swap, in_axes = (0,None,0))(b,i,j)
-    def sign(b,i,j,s):
-        return b.at[i].set(jax.numpy.sign(s[j]))
-    def sign_vmap(b,i,j,s):
-        return jax.vmap(sign, in_axes = (0,None,0,0))(b,i,j,s)
-    def eliminate(ap, i):
+    def swap_vmap(b,i,k):
+        return jax.vmap(swap, in_axes = (0,0,0))(b,i,k)
+    def sign(b,i,j,k,aj):
+        mask = jax.numpy.where(b[i]>0,0,1)
+        b = b.at[i].set(mask*(j+1)*jax.numpy.sign(aj[k])+(1-mask)*b[i])
+        return jax.numpy.where(J[0,0,:,0,0] >= a.shape[1], 0, b)
+    def sign_vmap(b,i,j,k,aj):
+        return jax.vmap(sign, in_axes = (0,0,None,0,0))(b,i,j,k,aj)
+    def updateblock(a,i,j):
+        return a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[0] != i) & (J[0] >= j), jax.numpy.einsum('jkl,mln->jmkn',a[:,j,:,:], a[i,:,:,:]), 0)) % p)    
+    def search(aj,i): # search column j below row i for index k.  
+        return jax.numpy.argmax(jax.numpy.where(I.reshape((1,-1)) >= i, aj, -1), axis = 1)
+    def extract(pv,a,i,j):
+        return jax.numpy.where(pv[i,None,None] != 0, a[i,j,:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
+    def extract_vmap(pv,a,i,j):
+        return jax.vmap(extract, in_axes = (0,0,0,None))(pv,a,i,j)
+    def eliminate(ap, j):
         a, piv = ap # a has shape b r c n n. piv has shape b c.
-        ai = a[:,:,i,:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2)
-        j = jax.numpy.argmax(jax.numpy.where(I.reshape((1,-1)) >= i, ai, -1), axis = 1) # Search column i for j.
-        a = swap_vmap(a,i,j) # Swap rows i and j.
-        piv = sign_vmap(piv,i,j,ai) # Identify pivots.
-        d = jax.numpy.where(piv[:,i,None,None] != 0, a[:,i,i,:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
-        a = a.at[:,i,:,:,:].set(jax.numpy.einsum('ijkl,ilm->ijkm', a[:,i,:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
-        a = a.at[:,:,:,:,:].set((a[:,:,:,:,:] - jax.numpy.where((I != i) & (J >= i), jax.numpy.einsum('ijkl,imln->ijmkn',a[:,:,i,:,:], a[:,i,:,:,:]), 0)) % p) # Update block.    
-        return (a, piv), j
-    a,piv = jax.lax.scan(eliminate, apiv, R, unroll = False)[0]
-    def permute(a,piv):
-        perm = jax.numpy.argsort(piv, axis = 0, descending = True)
-        rank = jax.numpy.sum(piv)
+        aj = a[:,:,j,:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2) # aj has shape b r.
+        i = jax.vmap(findpiv, in_axes = (0,None))(piv,j).reshape((a.shape[0],))  # i has shape b.
+        k = jax.vmap(search)(aj,i).reshape((a.shape[0],)) # k has shape b.
+        a = swap_vmap(a,i,k) # Swap rows i and k.
+        piv = sign_vmap(piv,i,j,k,aj) # Identify pivots.
+        d = extract_vmap(piv,a,i,j).reshape((a.shape[0],a.shape[3],a.shape[4])) # d has shape b n n.
+        a = a.at[:,i,:,:,:].set(jax.numpy.einsum('brcin,bnm->brcim', a[:,i,:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
+        a = jax.vmap(updateblock, in_axes = (0,0,None))(a,i,j)
+        return (a, piv), i
+    def permute(a,sgnpiv):
+        perm = jax.numpy.argsort(sgnpiv, axis = 0, descending = True)
+        rank = jax.numpy.sum(sgnpiv)
         rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
         return perm,rank,rref
-    perm,rank,rref = jax.vmap(permute)(a,piv)
+    a,piv = jax.lax.scan(eliminate, apiv, jax.numpy.arange(a.shape[2]), unroll = False)[0]
+    perm,rank,rref = jax.vmap(permute)(a,jax.numpy.sign(piv))
     return piv,perm,rank,rref
 
 @jax.jit
@@ -246,16 +261,16 @@ def kerim(a,f): # Matrix kernel and image over a finite field.
     m = min(r,c)
     apiv = (a, jax.numpy.zeros((b,c), dtype = DTYPE))
     piv,perm,rank,rref = gje2(apiv,f.INV)
-    rank =              rank.reshape((b,1,1,1,1))
-    Im = jax.numpy.arange(m).reshape((1,m,1,1,1))
-    Jm = jax.numpy.arange(m).reshape((1,1,m,1,1))
-    In = jax.numpy.arange(n).reshape((1,1,1,n,1))
-    Jn = jax.numpy.arange(n).reshape((1,1,1,1,n))
-    ker = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
-    iim = jax.numpy.zeros((b,c,m,n,n), dtype = DTYPE)
-    ker = ker.at[:,:m,:m,:,:].set(jax.numpy.where(Jm >= rank, -rref[:,:m,:m,:,:], 0))%f.p
-    ker = ker.at[:,:m,:,:,:].set(jax.numpy.where((Jm >= rank) & (Im == Jm) & (In == Jn), 1, ker[:,:m,:,:,:]))
-    iim = iim.at[:,:m,:m,:,:].set(jax.numpy.where((Im < rank) & (Jm < rank), rref[:,:m,:m,:,:],iim[:,:m,:m,:,:]))
+    rank =             rank.reshape((b,1,1,1,1))
+    I = jax.numpy.arange(c).reshape((1,c,1,1,1))
+    J = jax.numpy.arange(c).reshape((1,1,c,1,1))
+    i = jax.numpy.arange(n).reshape((1,1,1,n,1))
+    j = jax.numpy.arange(n).reshape((1,1,1,1,n))
+    ker = jax.numpy.zeros((b,c,c,n,n), dtype = DTYPE)
+    iim = jax.numpy.zeros((b,c,c,n,n), dtype = DTYPE)
+    ker = ker.at[:,:m,:,:,:].set(jax.numpy.where(J >= rank, -rref[:,:m,:,:,:], 0))%f.p
+    ker = ker.at[:,:,:,:,:].set(jax.numpy.where((J >= rank) & (I == J) & (i == j), 1, ker[:,:,:,:,:]))
+    iim = iim.at[:,:m,:,:,:].set(jax.numpy.where((I[:,:m] < rank) & (J < rank), rref[:,:m,:,:,:],0))
     def swap(ki,pm):
         return ki[pm]
     ker = jax.vmap(swap)(ker,perm)
@@ -490,12 +505,20 @@ class array:
         piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
         #piv = jax.numpy.zeros((self.shape[0],self.shape[2]+b.shape[2]), dtype = DTYPE)
         piv,_,_,_ = gje2((ba,piv),self.field.INV)
-        return self.new(mat2vec(piv[:,None,-self.shape[2]:,None,None]*self.lift()))
+        def pivcol(piv0):
+            mx = jax.numpy.max(piv0)
+            return jax.numpy.zeros(piv.shape[1], dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,piv.shape[1]+1)%piv.shape[1])).at[-1].set(jax.numpy.where(mx==piv.shape[1],1,0))
+        mask = jax.vmap(pivcol)(piv)
+        return self.new(mat2vec(mask[:,None,-self.shape[2]:,None,None]*self.lift()))
 
     def rankmod(self,b):
         ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
         piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
         piv,_,_,_ = gje2((ba,piv),self.field.INV)
+        def pivcol(piv0):
+            mx = jax.numpy.max(piv0)
+            return jax.numpy.zeros(piv.shape[1], dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,piv.shape[1]+1)%piv.shape[1])).at[-1].set(jax.numpy.where(mx==piv.shape[1],1,0))
+        piv = jax.vmap(pivcol)(piv)
         return jax.numpy.sum(piv[:,-self.shape[2]:], axis = 1)
 
     def transpose(self):
@@ -791,4 +814,77 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
     return graph, i
 
 # END EXPANDERS
+# BEGIN TOPOLOGY
+
+@functools.partial(jax.jit, static_argnums = 0)
+def polygon(n,field): # The boundary operator of a polygon.
+    I = jax.numpy.eye(n,dtype = DTYPE)
+    i = jax.numpy.arange(n).reshape((-1,1))
+    j = jax.numpy.arange(n).reshape((1,-1))
+    d3 = zeros(1,field)
+    d2 = ones((n,1),field)
+    d1 = array(I.at[:,:].set(jax.numpy.where((j-i)%n == 1,field.q-1,I)),field)
+    d0 = zeros((1,n),field)
+    return d0,d1,d2,d3
+
+def iterate(ap,i): # Permute.
+    a,perm = ap
+    return (a[perm],perm),a[perm]
+
+def involution(perm): # Construct an involution from a permutation.
+    n = len(perm)
+    return jax.numpy.arange(n).at[perm[:n//2]].set(perm[n//2:]).at[perm[n//2:]].set(perm[:n//2])
+
+def rotation(perm): # Rotate edges of the polygon around vertices of the identification space.
+    shift = jax.numpy.arange(1,len(perm)+1)%len(perm)
+    return shift[involution(perm)]
+
+def unique(a,n):
+    return jax.numpy.unique(a, size = n, fill_value = n)
+unique_vmap = jax.vmap(unique, in_axes = (1,None))
+
+def boundary(perm,field): # The boundary map on edges.
+    n = len(perm)
+    I = jax.numpy.eye(n, dtype = DTYPE)
+    edges = jax.numpy.arange(n)
+    vertices = jax.numpy.unique(unique_vmap(jax.lax.scan(iterate,(edges,rotation(perm)),edges)[1], n), axis = 0)
+    V = len(vertices)
+    source = array(jax.numpy.eye(V, dtype = DTYPE)[:,edges.at[vertices].set(jax.numpy.arange(V)[:,None])],field)
+    target = array(jax.numpy.eye(V, dtype = DTYPE)[:,edges.at[vertices].set(jax.numpy.arange(V)[:,None])][:,jax.numpy.arange(1,n+1)%n],field)
+    J = array(I[:,perm[:n//2]],field)
+    K = array(I[:,perm[n//2:]],field)
+    return (source-target)@(J-K)
+
+def surface(perm,field): # The boundary operator of a closed orientable surface made from a polygon.
+    n = len(perm)
+    d3 = zeros(1,field)
+    d2 = zeros((n//2,1),field)
+    d1 = boundary(perm,field)
+    d0 = zeros((1,d1.shape[1]),field)
+    return d0,d1,d2,d3
+
+@jax.jit
+def is_boundary(d): # d is a tuple of arrays.
+    boundary = True
+    for i in range(len(d)-1):
+        boundary = boundary & (d[i+1]@d[i]).is_zero()
+    return boundary
+
+@jax.jit
+def homology(d): # d is the boundary operator of a chain complex.
+    H = ()
+    for i in range(len(d)-1):
+        Hi = d[i].ker().mod(d[i+1].im())
+        H = H+(Hi,)
+    return H
+
+@jax.jit
+def betti(d): # d is the boundary operator of a chain complex.
+    H = ()
+    for i in range(len(d)-1):
+        Hi = d[i].ker().rankmod(d[i+1].im())
+        H = H+(Hi,)
+    return H
+
+# END TOPOLOGY
 # END POPPY
