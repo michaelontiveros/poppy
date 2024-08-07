@@ -207,52 +207,46 @@ def fdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
 
 @jax.jit
 def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
-    a, piv = apiv
+    a, piv = apiv # a has shape b r c n n. piv has shape b c.
+    b,r,c,n,n = a.shape
     p = 1+inv[-1] # p is prime.
-    I = jax.numpy.arange(a.shape[1]).reshape((1,-1,1,1,1))
-    J = jax.numpy.arange(a.shape[2]).reshape((1,1,-1,1,1))
-    #R = jax.numpy.arange(min(a.shape[1],a.shape[2]))
-    def findpiv(pv,j):
-        i = a.shape[2]-jax.numpy.argmax(jax.numpy.flip(jax.numpy.sign(pv)))
-        i = jax.numpy.where(i==a.shape[2], 0,i)
-        i = jax.numpy.where(i>=a.shape[1], a.shape[1]-1,i)
+    I = jax.numpy.arange(r).reshape((r,1,1,1)) # Row indices.
+    J = jax.numpy.arange(c).reshape((1,c,1,1)) # Column indices.
+    def searchpiv(pv): # pv[i] = j+1 if the array a has a pivot at ij, else 0. 
+        i = c-jax.numpy.argmax(jax.numpy.flip(jax.numpy.sign(pv)))
+        i = jax.numpy.where(i==c, 0,i)
+        i = jax.numpy.where(i>=r, r-1,i)
         return i
-    def swap(b,i,j):
-        return b.at[[i,j],:,:,:].set(b[[j,i],:,:,:])
-    def swap_vmap(b,i,k):
-        return jax.vmap(swap, in_axes = (0,0,0))(b,i,k)
-    def sign(b,i,j,k,aj):
-        mask = jax.numpy.where(b[i]>0,0,1)
-        b = b.at[i].set(mask*(j+1)*jax.numpy.sign(aj[k])+(1-mask)*b[i])
-        return jax.numpy.where(J[0,0,:,0,0] >= a.shape[1], 0, b)
-    def sign_vmap(b,i,j,k,aj):
-        return jax.vmap(sign, in_axes = (0,0,None,0,0))(b,i,j,k,aj)
-    def updateblock(a,i,j):
-        return a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I[0] != i) & (J[0] >= j), jax.numpy.einsum('jkl,mln->jmkn',a[:,j,:,:], a[i,:,:,:]), 0)) % p)    
-    def search(aj,i): # search column j below row i for index k.  
+    def searchcol(aj,i): # search column j below row i for index k.  
         return jax.numpy.argmax(jax.numpy.where(I.reshape((1,-1)) >= i, aj, -1), axis = 1)
-    def extract(pv,a,i,j):
-        return jax.numpy.where(pv[i,None,None] != 0, a[i,j,:,:], jax.numpy.eye(a.shape[3],dtype = DTYPE)[None,:,:])
-    def extract_vmap(pv,a,i,j):
-        return jax.vmap(extract, in_axes = (0,0,0,None))(pv,a,i,j)
+    def swaprows(a,i,j):
+        return a.at[[i,j],:,:,:].set(a[[j,i],:,:,:])
+    def updatepiv(pv,i,j,k,aj): # pv[i] = j+1 if the array a has a pivot at ij, else 0. 
+        mask = jax.numpy.where(pv[i]>0,0,1)
+        pv = pv.at[i].set(mask*(j+1)*jax.numpy.sign(aj[k])+(1-mask)*pv[i])
+        return jax.numpy.where(J.squeeze() >= r, 0, pv)
+    def extractpiv(pv,a,i,j):
+        return jax.numpy.where(pv[i,None,None] != 0, a[i,j,:,:], jax.numpy.eye(n,dtype = DTYPE)[None,:,:])
+    def updateblock(a,i,j):
+        return a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I != i) & (J >= j), jax.numpy.einsum('jkl,mln->jmkn',a[:,j,:,:], a[i,:,:,:]), 0)) % p)    
     def eliminate(ap, j):
         a, piv = ap # a has shape b r c n n. piv has shape b c.
-        aj = a[:,:,j,:,:].reshape((a.shape[0],a.shape[1],-1)).max(axis = 2) # aj has shape b r.
-        i = jax.vmap(findpiv, in_axes = (0,None))(piv,j).reshape((a.shape[0],))  # i has shape b.
-        k = jax.vmap(search)(aj,i).reshape((a.shape[0],)) # k has shape b.
-        a = swap_vmap(a,i,k) # Swap rows i and k.
-        piv = sign_vmap(piv,i,j,k,aj) # Identify pivots.
-        d = extract_vmap(piv,a,i,j).reshape((a.shape[0],a.shape[3],a.shape[4])) # d has shape b n n.
+        aj = a[:,:,j,:,:].reshape((b,r,-1)).max(axis = 2) 
+        i = jax.vmap(searchpiv)(piv).reshape((b,))  
+        k = jax.vmap(searchcol)(aj,i).reshape((b,)) 
+        a = jax.vmap(swaprows)(a,i,k)
+        piv = jax.vmap(updatepiv, in_axes = (0,0,None,0,0))(piv,i,j,k,aj)
+        d = jax.vmap(extractpiv, in_axes = (0,0,0,None))(piv,a,i,j).reshape((b,n,n)) 
         a = a.at[:,i,:,:,:].set(jax.numpy.einsum('brcin,bnm->brcim', a[:,i,:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
         a = jax.vmap(updateblock, in_axes = (0,0,None))(a,i,j)
         return (a, piv), i
     def permute(a,sgnpiv):
         perm = jax.numpy.argsort(sgnpiv, axis = 0, descending = True)
         rank = jax.numpy.sum(sgnpiv)
-        rref = a[perm[:a.shape[0]],:,:,:][:,perm,:,:]
+        rref = a[perm[:r],:,:,:][:,perm,:,:]
         return perm,rank,rref
-    a,piv = jax.lax.scan(eliminate, apiv, jax.numpy.arange(a.shape[2]), unroll = False)[0]
-    perm,rank,rref = jax.vmap(permute)(a,jax.numpy.sign(piv))
+    a,piv = jax.lax.scan(eliminate, apiv, jax.numpy.arange(c), unroll = False)[0] # Scan the columns of a.
+    perm,rank,rref = jax.vmap(permute)(a,jax.numpy.sign(piv)) # Move the pivots to the front of a.
     return piv,perm,rank,rref
 
 @jax.jit
