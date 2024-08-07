@@ -486,13 +486,10 @@ class array:
         return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
-        @jax.jit
-        def kerim_jit():    
-            k,i,rank = kerim(self.lift(),self.field)
-            ker = self.new(mat2vec(k))
-            im = self.new(mat2vec(i))
-            return ker,im
-        return kerim_jit()
+        k,i,rank = kerim(self.lift(),self.field)
+        ker = self.new(mat2vec(k))
+        im = self.new(mat2vec(i))
+        return ker,im
 
     def ker(self):
         return self.kerim()[0]
@@ -501,25 +498,26 @@ class array:
         return self.kerim()[1]
 
     def mod(self,b):
-        ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
-        piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
-        #piv = jax.numpy.zeros((self.shape[0],self.shape[2]+b.shape[2]), dtype = DTYPE)
-        piv,_,_,_ = gje2((ba,piv),self.field.INV)
+        c = self.shape[2]+b.shape[2]
         def pivcol(piv0):
             mx = jax.numpy.max(piv0)
-            return jax.numpy.zeros(piv.shape[1], dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,piv.shape[1]+1)%piv.shape[1])).at[-1].set(jax.numpy.where(mx==piv.shape[1],1,0))
+            return jax.numpy.zeros(c, dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,c+1)%c)).at[-1].set(jax.numpy.where(mx==c,1,0))
+        ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
+        piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
+        piv,_,_,_ = gje2((ba,piv),self.field.INV)
         mask = jax.vmap(pivcol)(piv)
         return self.new(mat2vec(mask[:,None,-self.shape[2]:,None,None]*self.lift()))
 
     def rankmod(self,b):
+        c = self.shape[2]+b.shape[2]
+        def pivcol(piv0):
+            mx = jax.numpy.max(piv0)
+            return jax.numpy.zeros(c, dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,c+1)%c)).at[-1].set(jax.numpy.where(mx==c,1,0))
         ba = jax.numpy.concatenate([b.lift(),self.lift()], axis = 2)
         piv = jax.numpy.concatenate([self.vec[:,0,:,0]*0, b.vec[:,0,:,0]*0], axis = 1)
         piv,_,_,_ = gje2((ba,piv),self.field.INV)
-        def pivcol(piv0):
-            mx = jax.numpy.max(piv0)
-            return jax.numpy.zeros(piv.shape[1], dtype = DTYPE).at[piv0-1].set(jax.numpy.sign(jax.numpy.arange(1,piv.shape[1]+1)%piv.shape[1])).at[-1].set(jax.numpy.where(mx==piv.shape[1],1,0))
-        piv = jax.vmap(pivcol)(piv)
-        return jax.numpy.sum(piv[:,-self.shape[2]:], axis = 1)
+        mask = jax.vmap(pivcol)(piv)
+        return jax.numpy.sum(mask[:,-self.shape[2]:], axis = 1)
 
     def transpose(self):
         return self.new(self.vec.swapaxes(1,2))
@@ -827,40 +825,45 @@ def polygon(n,field): # The boundary operator of a polygon.
     d0 = zeros((1,n),field)
     return d0,d1,d2,d3
 
+@jax.jit
 def iterate(ap,i): # Permute.
     a,perm = ap
     return (a[perm],perm),a[perm]
 
-def involution(perm): # Construct an involution from a permutation.
-    n = len(perm)
+@functools.partial(jax.jit, static_argnums = 0)
+def involution(n,perm): # Construct an involution from a permutation.
     return jax.numpy.arange(n).at[perm[:n//2]].set(perm[n//2:]).at[perm[n//2:]].set(perm[:n//2])
 
-def rotation(perm): # Rotate edges of the polygon around vertices of the identification space.
-    shift = jax.numpy.arange(1,len(perm)+1)%len(perm)
-    return shift[involution(perm)]
+@functools.partial(jax.jit, static_argnums = 0)
+def rotation(n,perm): # Rotate edges of the polygon around vertices of the identification space.
+    shift = jax.numpy.arange(1,n+1)%n
+    return shift[involution(n,perm)]
 
+@functools.partial(jax.jit, static_argnums = 1)
 def unique(a,n):
     return jax.numpy.unique(a, size = n, fill_value = n)
 unique_vmap = jax.vmap(unique, in_axes = (1,None))
 
-def boundary(perm,field): # The boundary map on edges.
-    n = len(perm)
-    I = jax.numpy.eye(n, dtype = DTYPE)
-    edges = jax.numpy.arange(n)
-    vertices = jax.numpy.unique(unique_vmap(jax.lax.scan(iterate,(edges,rotation(perm)),edges)[1], n), axis = 0)
-    V = len(vertices)
-    source = array(jax.numpy.eye(V, dtype = DTYPE)[:,edges.at[vertices].set(jax.numpy.arange(V)[:,None])],field)
-    target = array(jax.numpy.eye(V, dtype = DTYPE)[:,edges.at[vertices].set(jax.numpy.arange(V)[:,None])][:,jax.numpy.arange(1,n+1)%n],field)
-    J = array(I[:,perm[:n//2]],field)
-    K = array(I[:,perm[n//2:]],field)
-    return (source-target)@(J-K)
-
-def surface(perm,field): # The boundary operator of a closed orientable surface made from a polygon.
-    n = len(perm)
-    d3 = zeros(1,field)
-    d2 = zeros((n//2,1),field)
-    d1 = boundary(perm,field)
-    d0 = zeros((1,d1.shape[1]),field)
+def surface(perm,field): # The boundary operator of a closed orientable surface made out of a polygon.
+    F = 1 # Number of faces.
+    E = len(perm)//2 # Number of edges.
+    d3 = zeros((F,1),field) # shape F 1.
+    d2 = zeros((E,F),field) # shape E F.
+    RE = jax.numpy.arange(2*E)             # Edge representatives.
+    BE = jax.numpy.eye(2*E, dtype = DTYPE) # Edge basis.
+    L = array(BE[:,perm[:E]],field)        # shape 2E E.
+    R = array(BE[:,perm[E:]],field)        # shape 2E E.
+    RV = jax.numpy.unique(unique_vmap(jax.lax.scan(iterate,(RE,rotation(2*E,perm)),RE)[1], 2*E), axis = 0) # Vertex representatives.
+    V = len(RV) # Number of vertices.
+    RS = jax.numpy.arange(V)[:,None]     # Source vertex representatives.
+    RT = jax.numpy.arange(1,2*E+1)%(2*E) # Target vertex representatives.
+    BV = jax.numpy.eye(V, dtype = DTYPE) # Vertex basis.
+    BS = BV[:,RE.at[RV].set(RS)]         # Source vertex basis.
+    BT = BS[:,RT]                        # Target vertex basis.
+    S = array(BS,field)     # shape V 2E.
+    T = array(BT,field)     # shape V 2E.
+    d1 = (S-T)@(L-R)        # shape V E.
+    d0 = zeros((1,V),field) # shape 1 V.
     return d0,d1,d2,d3
 
 @jax.jit
@@ -873,18 +876,35 @@ def is_boundary(d): # d is a tuple of arrays.
 @jax.jit
 def homology(d): # d is the boundary operator of a chain complex.
     H = ()
-    for i in range(len(d)-1):
-        Hi = d[i].ker().mod(d[i+1].im())
+    ker = d[0].ker()
+    for i in range(1,len(d)):
+        k,im = d[i].kerim()
+        Hi = ker.mod(im)
         H = H+(Hi,)
+        ker = k
     return H
 
 @jax.jit
 def betti(d): # d is the boundary operator of a chain complex.
-    H = ()
-    for i in range(len(d)-1):
-        Hi = d[i].ker().rankmod(d[i+1].im())
-        H = H+(Hi,)
-    return H
+    B = ()
+    ker = d[0].ker()
+    for i in range(1,len(d)):
+        k,im = d[i].kerim()
+        Bi = ker.rankmod(im)
+        B = B+(Bi,)
+        ker = k
+    return B
+
+@jax.jit
+def euler_characteristic(d): # d is the boundary operator of a chain complex.
+    x = 0
+    ker = d[0].ker()
+    for i in range(1,len(d)):
+        k,im = d[i].kerim()
+        Bi = ker.rankmod(im)
+        x = x-(-1)**(i%2)*Bi
+        ker = k
+    return x
 
 # END TOPOLOGY
 # END POPPY
