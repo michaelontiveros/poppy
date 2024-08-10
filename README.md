@@ -1,5 +1,5 @@
 # Introduction
-POPPY is a python module for linear algebra over finite fields on the GPU. It has two classes: `field` and `array`. It is written in [JAX](https://github.com/google/jax).
+POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields. It has two classes: `field` and `array`.
 
 
 
