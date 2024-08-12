@@ -16,46 +16,57 @@ def polygon(n,field): # The boundary operator of a polygon.
     d3 = zeros((F,1),field)
     return d0,d1,d2,d3
 
+@functools.partial(jax.jit, static_argnums = 0)
+def involution(n,perm): # Construct an involution from a permutation.
+    return jax.numpy.arange(n).at[perm[:n//2]].set(perm[n//2:]).at[perm[n//2:]].set(perm[:n//2])
+
+@functools.partial(jax.jit, static_argnums = (0,1))
+def rotation(V,D): # Rotate half-edges around vertices.
+    return jax.numpy.tile(jax.numpy.arange(1,D+1)%D,V)+jax.numpy.repeat(jax.numpy.arange(0,V*D,D),D)
+
+@functools.partial(jax.jit, static_argnums = (0,1))
+def generator(V,D,perm): # Permute half-edges.
+    return rotation(V,D)[involution(V*D,perm)]
+
 @jax.jit
 def iterate(ap,i):
     a,perm = ap
     return (a[perm],perm),a[perm]
 
-@functools.partial(jax.jit, static_argnums = 0)
-def involution(n,perm): # Construct an involution from a permutation.
-    return jax.numpy.arange(n).at[perm[:n//2]].set(perm[n//2:]).at[perm[n//2:]].set(perm[:n//2])
+@functools.partial(jax.jit, static_argnums = (0,1))
+def orbit(V,D,a,perm):
+    return jax.lax.scan(iterate, (a,generator(V,D,perm)), a)[1]
 
-@functools.partial(jax.jit, static_argnums = 0)
-def rotation(n,perm): # Rotate edges of the polygon around vertices of the identification space.
-    shift = jax.numpy.arange(1,n+1)%n
-    return shift[involution(n,perm)]
+@functools.partial(jax.jit, static_argnums = (0,1))
+def unique_jit(V,D,a):
+    return jax.numpy.unique(a, size = V*D, fill_value = V*D)
 
-@functools.partial(jax.jit, static_argnums = 1)
-def unique_jit(a,n):
-    return jax.numpy.unique(a, size = n, fill_value = n)
-unique = jax.vmap(unique_jit, in_axes = (1,None))
+def unique(V,D,a):
+    return jax.numpy.unique(jax.vmap(unique_jit, in_axes = (None,None,1))(V,D,a), axis = 0)
 
-def surface(perm,field): # The boundary operator of a closed orientable surface made out of a polygon.
-    F = 1            # Number of faces.
-    E = len(perm)//2 # Number of edges.
-    RE = jax.numpy.arange(2*E)             # Edge representatives.
-    BE = jax.numpy.eye(2*E, dtype = DTYPE) # Edge basis.
-    L = array(BE[:,perm[:E]],field)        # Left edges.
-    R = array(BE[:,perm[E:]],field)        # Right edges.
-    RV = jax.numpy.unique(unique(jax.lax.scan(iterate,(RE,rotation(2*E,perm)),RE)[1], 2*E), axis = 0) # Vertex representatives.
-    V = len(RV)      # Number of vertices.
-    RS = jax.numpy.arange(V)[:,None]     # Source vertex representatives.
-    RT = jax.numpy.arange(1,2*E+1)%(2*E) # Target vertex representatives.
-    BV = jax.numpy.eye(V, dtype = DTYPE) # Vertex basis.
-    BS = BV[:,RE.at[RV].set(RS)]         # Source vertex basis.
-    BT = BS[:,RT]                        # Target vertex basis.
-    S = array(BS,field)     # Shape V 2E.
-    T = array(BT,field)     # Shape V 2E.
-    d0 = zeros((1,V),field) # Shape 1 V.
-    d1 = (S-T)@(L-R)        # Shape V E.
-    d2 = zeros((E,F),field) # Shape E F.
-    d3 = zeros((F,1),field) # Shape F 1.
-    return d0,d1,d2,d3
+def graph(degree,perm,field): # The coboundary operator of a regular ribbon graph.
+    D = degree 
+    H = len(perm)                            # Number of half-edges.
+    V = H//D                                 # Number of vertices.
+    RE = jax.numpy.arange(H)                 # Edge representatives.
+    BE = jax.numpy.eye(H, dtype = DTYPE)     # Edge basis.
+    L = array(BE[:,perm[:H//2]],field)       # Left edges.
+    R = array(BE[:,perm[H//2:]],field)       # Right edges.
+    RF = unique(V, D, orbit(V, D, RE, perm)) # Face representatives.
+    F = len(RF)                              # Number of faces.
+    RS = jax.numpy.arange(F)[:,None]         # Source face representatives.
+    RT = rotation(V,D)                       # Target face representatives.
+    BF = jax.numpy.eye(F, dtype = DTYPE)     # Face basis.
+    BS = BF[:,RE.at[RF].set(RS)]             # Source face basis.
+    BT = BS[:,RT]                            # Target face basis.
+    S = array(BS,field)       # Shape F H.
+    T = array(BT,field)       # Shape F H.
+    FE = array(jax.numpy.sum(BE[perm].reshape((H,V,D)),axis=2),field) # Shape H V.
+    d3 = zeros((1,F),field)   # Shape 1 F.
+    d2 = (S-T)@(L-R)          # Shape F E.
+    d1 = (L-R).transpose()@FE # Shape E V.
+    d0 = zeros((V,1),field)   # Shape V 1.
+    return d3,d2,d1,d0
 
 @jax.jit
 def is_boundary(d): # d is a tuple of arrays.
@@ -88,13 +99,13 @@ def betti(d): # d is the boundary operator of a chain complex.
 
 @jax.jit
 def euler_characteristic(d): # d is the boundary operator of a chain complex.
-    x = 0
+    X = 0
     ker = d[0].ker()
     for i in range(1,len(d)):
         k,im = d[i].kerim()
         Bi = ker.rankmod(im)
-        x = x-(-1)**(i%2)*Bi
+        X = X-(-1)**(i%2)*Bi
         ker = k
-    return x
+    return X
 
 # END TOPOLOGY

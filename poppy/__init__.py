@@ -5,5 +5,5 @@ from poppy.rep import block, unblock, int2vec, vec2int, int2mat, mat2int, vec2ma
 from poppy.ring import Z2, M2
 from poppy.group import gl2, sl2, pgl2, pgl2mod, psl2, psl2mod, decode
 from poppy.expander import lps
-from poppy.topology import polygon, surface, is_boundary, homology, betti, euler_characteristic
+from poppy.topology import polygon, graph, is_boundary, homology, betti, euler_characteristic
 from poppy.plot import plot
