@@ -1,7 +1,7 @@
 import jax
 import functools
 from poppy.modular import negmod, addmod, submod
-from poppy.linear import fdet_vmap, mgetrf_vmap, getrf_vmap, invmod, invmod_vmap, kerim, gje2, DTYPE, BLOCKSIZE
+from poppy.linear import fdet, mgetrf, getrf, invmod, kerim, gje2, DTYPE, BLOCKSIZE
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
 
 # BEGIN ARRAY
@@ -69,23 +69,23 @@ class array:
         return self.new(jax.numpy.trace(self.vec, axis1 = 1, axis2 = 2)%self.field.p)
 
     def det(self):
-        return self.new(mat2vec(fdet_vmap(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
+        return self.new(mat2vec(fdet(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def lu(self):
-        return mgetrf_vmap(vec2mat(self.vec,self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
+        return mgetrf(vec2mat(self.vec,self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
 
     def lu_block(self):
-        return getrf_vmap(vec2mat(self.vec, self.field), self.field.INV, BLOCKSIZE)
+        return getrf(vec2mat(self.vec, self.field), self.field.INV, BLOCKSIZE)
 
     def inv(self):
-        return self.new(mat2vec(block(invmod_vmap(unblock(vec2mat(self.vec,self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
+        return self.new(mat2vec(block(invmod(unblock(vec2mat(self.vec,self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
 
     def rank(self):
         @jax.jit
-        def unique(a):
+        def unique_jit(a):
             return jax.numpy.unique(a, size = self.shape[1], fill_value = -1)
-        unique_vmap = jax.vmap(unique)
-        return jax.numpy.count_nonzero(unique_vmap(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
+        unique = jax.vmap(unique_jit)
+        return jax.numpy.count_nonzero(unique(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
         k,i,rank = kerim(self.lift(),self.field)

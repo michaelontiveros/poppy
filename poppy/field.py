@@ -2,7 +2,7 @@ import jax
 import conway_polynomials
 import functools
 from poppy.modular import mulmod, matmulmod, negmod
-from poppy.linear import invmod, DTYPE, BLOCKSIZE
+from poppy.linear import invmod1, DTYPE, BLOCKSIZE
 
 # BEGIN FIELD
 
@@ -70,14 +70,14 @@ class field:
     def dual(self):
         A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         R = self.BASIS[1]
-        Ri = invmod(R, self.INV, BLOCKSIZE)
+        Ri = invmod1(R, self.INV, BLOCKSIZE)
         DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
         def dualscan(b,i):
             b = b.at[i].set((Ri@b[i-1]-Ri*A[i])%self.p)
             return b, b[i]
         DD = jax.lax.scan(dualscan,DD,jax.numpy.arange(1,self.n))[0]
         C = jax.numpy.tensordot(DD,self.BASIS,axes = ([0,2],[0,1]))%self.p
-        Ci = invmod(C, self.INV, BLOCKSIZE)
+        Ci = invmod1(C, self.INV, BLOCKSIZE)
         D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
         return D   
 
