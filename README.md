@@ -1,5 +1,5 @@
 # Introduction
-POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields. It has two classes: `field` and `array`.
+POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields.
 
 
 
