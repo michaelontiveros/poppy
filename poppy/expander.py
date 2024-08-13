@@ -1,11 +1,9 @@
 import jax 
 import functools
-from poppy.linear import DTYPE
-from poppy.field import field, POLYNOMIAL
+from poppy.constant import DTYPE, POLYNOMIAL
+from poppy.field import field
 from poppy.ring import Z2, M2
 from poppy.group import psl2mod, pgl2mod 
-
-# BEGIN EXPANDER
 
 @functools.partial(jax.jit, static_argnums = 0)
 def pS1(p): # A point on the circle x*x + y*y = (p-1) mod p.
@@ -83,5 +81,3 @@ def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cay
     G, i = psl2mod(q) if l == 1 else pgl2mod(q)
     graph = jax.vmap(mul)(G)
     return graph, i
-
-# END EXPANDER

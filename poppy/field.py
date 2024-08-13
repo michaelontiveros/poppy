@@ -1,21 +1,8 @@
 import jax
-import conway_polynomials
 import functools
+from poppy.constant import DTYPE, POLYNOMIAL, BLOCKSIZE
 from poppy.modular import mulmod, matmulmod, negmod
-from poppy.linear import invmod1, DTYPE, BLOCKSIZE
-
-# BEGIN FIELD
-
-# A finite field is a polynomial ring modulo an irreducible polynomial.
-POLYNOMIAL = conway_polynomials.database()
-
-p12 = 3329
-p16 = 65521
-p22 = 4194191
-p30 = 999999733
-
-POLYNOMIAL[p22] = {}
-POLYNOMIAL[p30] = {}
+from poppy.linear import invmod1
 
 class field:
     def __init__(self, p, n, inv = True):    
@@ -85,6 +72,7 @@ class field:
         R = jax.numpy.arange(self.p)
         return (-jax.numpy.ones(self.p, dtype = DTYPE)).at[(R*R) % self.p].set(1).at[0].set(0)
 
+# BEGIN REGISTER FIELD
 def flatten_field(f):
     children = (f.BASIS, f.DUAL, f.INV)
     aux_data = (f.p, f.n, f.q)
@@ -95,5 +83,4 @@ def unflatten_field(aux_data, children):
     f.p, f.n, f.q = aux_data
     return f
 jax.tree_util.register_pytree_node(field, flatten_field, unflatten_field)
-
-# END FIELD
+# END REGISTER FIELD

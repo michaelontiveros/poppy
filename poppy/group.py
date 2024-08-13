@@ -1,9 +1,7 @@
 import jax
 import functools
-from poppy.linear import DTYPE
+from poppy.constant import DTYPE
 from poppy.rep import int2mat, mat2int
-
-# BEGIN GROUP
 
 @functools.partial(jax.jit, static_argnums = 1)
 def encode(a,q): # a has shape 2 2 over Zq for q < 256.
@@ -128,5 +126,3 @@ def psl2mod(q): # The projective special linear group PSL_2( Z/q ).
     idx = q**4*jax.numpy.ones(len(m2c), dtype = jax.numpy.uint32)
     idx = idx.at[i].set(jax.numpy.arange(len(i), dtype = jax.numpy.uint32))
     return psl2c, idx
-
-# END GROUP

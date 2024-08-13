@@ -1,15 +1,7 @@
 import jax
 import functools
+from poppy.constant import DTYPE, BLOCKSIZE
 from poppy.modular import matmulmod
-
-# BEGIN LINEAR ALGEBRA
-
-# 64 bit integer arrays encode numbers in finite fields.
-jax.config.update("jax_enable_x64", True)
-DTYPE = jax.numpy.int64
-
-# Linear algebra subroutines are blocked.
-BLOCKSIZE = 32
 
 @jax.jit
 def transpose(a):
@@ -225,5 +217,3 @@ def kerim(a,f): # Matrix kernel and image over a finite field.
     iim = jax.vmap(swap)(iim,perm)
     im = jax.numpy.einsum('ijklm,iknmt->ijnlt',a,iim)%f.p
     return ker,im,rank
-
-# END LINEAR ALGEBRA

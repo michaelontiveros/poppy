@@ -1,10 +1,9 @@
 import jax
 import functools
+from poppy.constant import DTYPE, BLOCKSIZE, SEED
 from poppy.modular import negmod, addmod, submod
-from poppy.linear import fdet, mgetrf, getrf, invmod, kerim, gje2, DTYPE, BLOCKSIZE
+from poppy.linear import fdet, mgetrf, getrf, invmod, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
-
-# BEGIN ARRAY
 
 class array:
     def __init__(self, a, field):
@@ -140,6 +139,7 @@ class array:
     def direct_prod(self,b):
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
 
+# BEGIN REGISTER ARRAY
 def flatten_array(a):
     children = (a.vec, a.field)
     aux_data = (a.shape,)
@@ -150,28 +150,20 @@ def unflatten_array(aux_data, children):
     a.shape, = aux_data
     return a
 jax.tree_util.register_pytree_node(array, flatten_array, unflatten_array)
+# END REGISTER ARRAY
 
-# END ARRAY
 # BEGIN NAMED ARRAYS
-
 def zeros(shape,field):
     return array(jax.numpy.zeros(shape, dtype = DTYPE), field)
-
 def ones(shape,field):
     return array(jax.numpy.ones(shape, dtype = DTYPE), field)
-
 def eye(shape,field):
     return array(jax.numpy.eye(shape, dtype = DTYPE), field)
-
 # END NAMED ARRAYS 
+
 # BEGIN RANDOM ARRAYS
-
-# The pseudo random number generator has a default seed.
-SEED = 0 
-
 def key(seed = SEED):
     return jax.random.key(seed)
-
 def random(shape, field, seed = SEED): 
     SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
     r = jax.random.randint(key(seed), SHAPE+(field.n,), 0, field.p, dtype = DTYPE)
@@ -180,5 +172,4 @@ def random(shape, field, seed = SEED):
     a.shape = SHAPE
     a.vec = r
     return a
-
 # END RANDOM ARRAYS

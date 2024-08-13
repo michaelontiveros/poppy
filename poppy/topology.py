@@ -1,9 +1,7 @@
 import jax
 import functools
-from poppy.linear import DTYPE
+from poppy.constant import DTYPE
 from poppy.array import array, zeros, ones
-
-# BEGIN TOPOLOGY
 
 @functools.partial(jax.jit, static_argnums = 0)
 def polygon(n,field): # The boundary operator of a polygon.
@@ -107,5 +105,3 @@ def euler_characteristic(d): # d is the boundary operator of a chain complex.
         X = X-(-1)**(i%2)*Bi
         ker = k
     return X
-
-# END TOPOLOGY
