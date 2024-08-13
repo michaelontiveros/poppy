@@ -46,7 +46,7 @@ def mgetrf2(aperm, inv): # Sequential lu decomposition mod p.
     return jax.lax.scan(f, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
-def mgetrf(a, inv, b): # Blocked lu decompposition mod p.
+def mgetrf1(a, inv, b): # Blocked lu decompposition mod p.
     p = 1+inv[-1]
     m = min(a.shape)
     perm = jax.numpy.arange(len(a))
@@ -64,26 +64,27 @@ def mgetrf(a, inv, b): # Blocked lu decompposition mod p.
     iperm = jax.numpy.arange(len(perm))
     iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm
-mgetrf_vmap = jax.vmap(mgetrf, in_axes = (0, None, None))
 
-def invmod(a, inv, b): # Matrix inverse mod p.
+mgetrf = jax.vmap(mgetrf1, in_axes = (0, None, None))
+
+def invmod1(a, inv, b): # Matrix inverse mod p.
     if len(a) == 1:
         return inv[a[0,0]].reshape((1,1))
     p = 1+inv[-1]
     I = jax.numpy.eye(len(a), dtype = DTYPE)
-    l, u, d, iperm = mgetrf(a, inv, b)
+    l, u, d, iperm = mgetrf1(a, inv, b)
     D = inv[d]
     L = mtrsm(l, I, p) # L = 1/l.
     U = mtrsm((D*u%p).T, D*I, p).T # U = 1/u.      
     return (U@L%p)[:,iperm]
 
-def invmod_vmap(a, inv, b): # Matrix inverse mod p.
+def invmod(a, inv, b): # Matrix inverse mod p.
     if a.shape[1] == 1:
         return inv[a[:,0,0]].reshape((a.shape[0],1,1))
     p = 1+inv[-1]
     I = jax.numpy.eye(a.shape[1], dtype = DTYPE)
     def inverse(A):
-        l, u, d, iperm = mgetrf(A, inv, b)
+        l, u, d, iperm = mgetrf1(A, inv, b)
         D = inv[d]
         L = mtrsm(l, I, p) # L = 1/l.
         U = mtrsm((D*u%p).T, D*I, p).T # U = 1/u.      
@@ -116,14 +117,14 @@ def getrf2(aperm, inv): # Sequential lu decomposition over a finite field.
         j = jax.numpy.argmax(jax.numpy.where(I[:,0,0,0] >= i, ai, -1)) # Search column i for j.
         a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
         perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
-        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,:,:,0] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod(a[i,i,:,:], inv, BLOCKSIZE), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
+        a = a.at[:,i,:,:].set(jax.numpy.where(I[:,:,:,0] > i, (jax.numpy.tensordot(a[:,i,:,:], invmod1(a[i,i,:,:], inv, BLOCKSIZE), axes = (2,0))) % p, a[:,i,:,:])) # Scale column i.
         a = a.at[:,:,:,:].set((a[:,:,:,:] - jax.numpy.where((I > i) & (J > i), jax.numpy.tensordot(a[:,i,:,:], a[i,:,:,:], axes = (2,1)).swapaxes(1,2), 0)) % p) # Update block D.    
         parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
         return (a, perm, parity), j
     return jax.lax.scan(eliminate, aperm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
-def getrf(a, inv, b): # Blocked lu decompposition over a finite field.
+def getrf1(a, inv, b): # Blocked lu decompposition over a finite field.
     p = 1+inv[-1]
     r,c = a.shape[0], a.shape[1]
     m = min(r,c)
@@ -147,19 +148,14 @@ def getrf(a, inv, b): # Blocked lu decompposition over a finite field.
     iperm = jax.numpy.arange(len(perm))
     iperm = iperm.at[perm].set(iperm)  
     return l, u, d, iperm, parity
-getrf_vmap = jax.vmap(getrf, in_axes = (0, None, None))
+
+getrf = jax.vmap(getrf1, in_axes = (0, None, None))
 
 def fdet(a, inv, p, b): # Matrix determinant over a finite field.
     def matmul(A,B):
         return matmulmod(A,B,p)
-    l, u, d, iperm, parity = getrf(a, inv, b)
-    return jax.numpy.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
-
-def fdet_vmap(a, inv, p, b): # Matrix determinant over a finite field.
-    def matmul(A,B):
-        return matmulmod(A,B,p)
     def det(A):
-        l, u, d, iperm, parity = getrf(A, inv, b)
+        l, u, d, iperm, parity = getrf1(A, inv, b)
         return jax.numpy.power(-1, parity) * jax.lax.associative_scan(matmul, d)[-1]% p
     return jax.vmap(det)(a)
 
@@ -195,7 +191,7 @@ def gje2(apiv, inv): # Sequential Gauss-Jordan elimination over a finite field.
         a = jax.vmap(swaprows)(a,i,k)
         piv = jax.vmap(updatepiv, in_axes = (0,0,None,0,0))(piv,i,j,k,aj)
         d = jax.vmap(extractpiv, in_axes = (0,0,0,None))(piv,a,i,j).reshape((b,n,n)) 
-        a = a.at[:,i,:,:,:].set(jax.numpy.einsum('brcin,bnm->brcim', a[:,i,:,:,:], invmod_vmap(d, inv, BLOCKSIZE)))%p # Scale row i.
+        a = a.at[:,i,:,:,:].set(jax.numpy.einsum('brcin,bnm->brcim', a[:,i,:,:,:], invmod(d, inv, BLOCKSIZE)))%p # Scale row i.
         a = jax.vmap(updateblock, in_axes = (0,0,None))(a,i,j)
         return (a, piv), i
     def permute(a,sgnpiv):
