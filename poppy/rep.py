@@ -3,6 +3,10 @@ import functools
 from poppy.constant import DTYPE
 
 # BEGIN RESHAPE
+@jax.jit
+def transpose(a):
+    return a.swapaxes(-2,-1) 
+
 @functools.partial(jax.jit, static_argnums = 1)
 def block(a,f): 
     s = a.shape
@@ -40,4 +44,8 @@ def int2mat(i,f):
 @functools.partial(jax.jit, static_argnums = 1)
 def mat2int(m,f):
     return vec2int(mat2vec(m),f)
+
+@jax.jit
+def rep(v,b,p):
+    return jax.numpy.tensordot(v,b, axes = ([-1],[0]))%p
 # END LIFT/PROJECT

@@ -67,11 +67,11 @@ def graph(degree,perm,field): # The coboundary operator of a regular ribbon grap
     return d3,d2,d1,d0
 
 @jax.jit
-def is_boundary(d): # d is a tuple of arrays.
-    boundary = True
+def boundary(d): # d is a tuple of arrays.
+    b = True
     for i in range(len(d)-1):
-        boundary = boundary & (d[i+1]@d[i]).is_zero()
-    return boundary
+        b = b & (d[i+1]@d[i]).is_zero()
+    return b
 
 @jax.jit
 def homology(d): # d is the boundary operator of a chain complex.
@@ -82,7 +82,7 @@ def homology(d): # d is the boundary operator of a chain complex.
         Hi = ker.mod(im)
         H = H+(Hi,)
         ker = k
-    return H
+    return H # Homology groups.
 
 @jax.jit
 def betti(d): # d is the boundary operator of a chain complex.
@@ -93,10 +93,10 @@ def betti(d): # d is the boundary operator of a chain complex.
         Bi = ker.rankmod(im)
         B = B+(Bi,)
         ker = k
-    return B
+    return B # Betti numbers.
 
 @jax.jit
-def euler_characteristic(d): # d is the boundary operator of a chain complex.
+def euler(d): # d is the boundary operator of a chain complex.
     X = 0
     ker = d[0].ker()
     for i in range(1,len(d)):
@@ -104,4 +104,4 @@ def euler_characteristic(d): # d is the boundary operator of a chain complex.
         Bi = ker.rankmod(im)
         X = X-(-1)**(i%2)*Bi
         ker = k
-    return X
+    return X # Euler characteristic.

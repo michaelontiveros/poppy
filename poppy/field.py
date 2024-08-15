@@ -2,14 +2,14 @@ import jax
 import functools
 from poppy.constant import DTYPE, POLYNOMIAL, BLOCKSIZE
 from poppy.modular import mulmod, matmulmod, negmod
-from poppy.linear import invmod1
+from poppy.linear import inv1
 
 class field:
-    def __init__(self, p, n, inv = True):    
+    def __init__(self, p, n, inverse = True):    
         self.p = p # Field characteristic.
         self.n = n # Field degree.
         self.q = p**n if n*jax.numpy.log2(p) < 63 else None # Field order.
-        self.INV = self.inv() if inv else None # Multiplicative inverse mod p.
+        self.INV = self.inv() if inverse else None # Multiplicative inverse mod p.
         self.BASIS = self.basis() # Power basis.
         self.DUAL = self.dual()   # Dual basis.
 
@@ -57,14 +57,14 @@ class field:
     def dual(self):
         A = jax.numpy.array(POLYNOMIAL[self.p][self.n][:-1], dtype = DTYPE)
         R = self.BASIS[1]
-        Ri = invmod1(R, self.INV, BLOCKSIZE)
+        Ri = inv1(R, self.INV, BLOCKSIZE)
         DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
         def dualscan(b,i):
             b = b.at[i].set((Ri@b[i-1]-Ri*A[i])%self.p)
             return b, b[i]
         DD = jax.lax.scan(dualscan,DD,jax.numpy.arange(1,self.n))[0]
         C = jax.numpy.tensordot(DD,self.BASIS,axes = ([0,2],[0,1]))%self.p
-        Ci = invmod1(C, self.INV, BLOCKSIZE)
+        Ci = inv1(C, self.INV, BLOCKSIZE)
         D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
         return D   
 
