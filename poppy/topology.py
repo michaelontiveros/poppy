@@ -44,6 +44,7 @@ def unique(V,D,a):
 
 def graph(degree,perm,field): # The coboundary operator of an orientable regular ribbon graph.
     D = degree 
+    perm = jax.numpy.array(perm, dtype = DTYPE)
     H = len(perm)                            # Number of half-edges.
     V = H//D                                 # Number of vertices.
     RE = jax.numpy.arange(H)                 # Edge representatives.
