@@ -1,5 +1,7 @@
 # Introduction
-POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields.
+POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields. There is a `field` class, and an `array` class. 
+
+An `array` is a batch of matrices over a `field`; it has `3` dimensions. It is stored as a `4`-dimensional `jax.numpy.int64` array. It is lifted to a `5`-dimensional linear representation before multiplicative operations. The length of the `4th` and `5th` dimension is the degree of the field.
 
 
 
@@ -17,7 +19,7 @@ POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over 
 
 # Linear Representation
 POPPY represents the finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. It extends linearly to a faithful `mod p` representation 
-of the matrix algebra `M_k( F )`. A matrix `mod p` is a `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer matrices `mod p`.
+of the matrix algebra `M_k( F )`. A matrix `mod p` is a `2`-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer arrays `mod p`.
 
 # Performance
 
