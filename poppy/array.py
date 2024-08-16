@@ -2,7 +2,7 @@ import jax
 import functools
 from poppy.constant import DTYPE, BLOCKSIZE, SEED
 from poppy.modular import negmod, addmod, submod
-from poppy.linear import det, mgetrf, getrf, inv, kerim, gje2
+from poppy.linear import matmul34, det, mgetrf, getrf, inv, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
 
 class array:
@@ -26,11 +26,15 @@ class array:
         a = object.__new__(array)
         a.field = self.field
         a.shape = v.shape[:-1]
+        a.shape = (v.shape[0],1,1) if len(v.shape) == 2 else (1,v.shape[0],v.shape[1]) if len(v.shape) == 3 else v.shape[:-1]
         a.vec = v
         return a
 
     def __repr__(self):
         return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
+
+    def __getitem__(self,i):
+        return self.new(self.vec[i])
 
     def __neg__(self):
         return self.new(negmod(self.vec, self.field.p))
@@ -55,7 +59,7 @@ class array:
     
     def __matmul__(self, a):
         def matmul(b,c):
-            return jax.numpy.tensordot(b,vec2mat(c,self.field), axes = ([1,2],[0,2]))%self.field.p
+            return matmul34(b,vec2mat(c,self.field),self.field.p)
         return self.new(jax.vmap(matmul)(self.vec, a.vec))
 
     def lift(self):
@@ -64,6 +68,14 @@ class array:
     def proj(self):
         return vec2int(self.vec, self.field)
 
+    def t(self):
+        return self.new(self.vec.swapaxes(1,2))
+
+    def vanishes(self):
+        def test(a):
+            return jax.numpy.count_nonzero(a) == 0
+        return jax.vmap(test)(self.vec)
+
     def trace(self):  
         return self.new(jax.numpy.trace(self.vec, axis1 = 1, axis2 = 2)%self.field.p)
 
@@ -71,7 +83,7 @@ class array:
         return self.new(mat2vec(det(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def lu(self):
-        return mgetrf(vec2mat(self.vec,self.field).swapaxes(-2,-3).reshape((self.shape[0],self.shape[1]*self.field.n,self.shape[2]*self.field.n)), self.field.INV, BLOCKSIZE)
+        return mgetrf(unblock(vec2mat(self.vec,self.field),self.field), self.field.INV, BLOCKSIZE)
 
     def lu_block(self):
         return getrf(vec2mat(self.vec, self.field), self.field.INV, BLOCKSIZE)
@@ -120,23 +132,14 @@ class array:
         mask = jax.vmap(pivcol)(piv)
         return jax.numpy.sum(mask[:,-self.shape[2]:], axis = 1)
 
-    def transpose(self):
-        return self.new(self.vec.swapaxes(1,2))
-
-    def is_zero(self):
-        def thread(a):
-            return jax.numpy.count_nonzero(a) == 0
-        zero = jax.vmap(thread)(self.vec)
-        return zero
-
-    def direct_sum(self,d):
+    def dirsum(self,d):
         b = jax.numpy.zeros((self.shape[0],self.shape[1],d.shape[2],self.field.n), dtype = DTYPE)
         c = jax.numpy.zeros((self.shape[0],d.shape[1],self.shape[2],self.field.n), dtype = DTYPE)
         top = jax.numpy.concatenate([self.vec,b], axis = 2)
         bot = jax.numpy.concatenate([c,d.vec], axis = 2)
         return self.new(jax.numpy.concatenate([top,bot],axis = 1))
     
-    def direct_prod(self,b):
+    def dirprod(self,b):
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
 
 # BEGIN REGISTER ARRAY
@@ -157,6 +160,8 @@ def zeros(shape,field):
     return array(jax.numpy.zeros(shape, dtype = DTYPE), field)
 def ones(shape,field):
     return array(jax.numpy.ones(shape, dtype = DTYPE), field)
+def arange(n,field):
+    return array(jax.numpy.arange(n, dtype = DTYPE).reshape((1,1,n))%field.q, field)
 def eye(shape,field):
     return array(jax.numpy.eye(shape, dtype = DTYPE), field)
 # END NAMED ARRAYS 
@@ -165,11 +170,11 @@ def eye(shape,field):
 def key(seed = SEED):
     return jax.random.key(seed)
 def random(shape, field, seed = SEED): 
-    SHAPE = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
-    r = jax.random.randint(key(seed), SHAPE+(field.n,), 0, field.p, dtype = DTYPE)
+    shape = (shape,1,1) if type(shape) == int else (shape[0],1,1) if len(shape) == 1 else (1,shape[0],shape[1]) if len(shape) == 2 else shape
+    sample = jax.random.randint(key(seed), shape+(field.n,), 0, field.p, dtype = DTYPE)
     a = object.__new__(array)
     a.field = field
-    a.shape = SHAPE
-    a.vec = r
+    a.shape = shape
+    a.vec = sample
     return a
 # END RANDOM ARRAYS

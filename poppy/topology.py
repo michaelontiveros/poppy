@@ -42,7 +42,7 @@ def unique_jit(V,D,a):
 def unique(V,D,a):
     return jax.numpy.unique(jax.vmap(unique_jit, in_axes = (None,None,1))(V,D,a), axis = 0)
 
-def graph(degree,perm,field): # The coboundary operator of a regular ribbon graph.
+def graph(degree,perm,field): # The coboundary operator of an orientable regular ribbon graph.
     D = degree 
     H = len(perm)                            # Number of half-edges.
     V = H//D                                 # Number of vertices.
@@ -57,20 +57,20 @@ def graph(degree,perm,field): # The coboundary operator of a regular ribbon grap
     BF = jax.numpy.eye(F, dtype = DTYPE)     # Face basis.
     BS = BF[:,RE.at[RF].set(RS)]             # Source face basis.
     BT = BS[:,RT]                            # Target face basis.
-    S = array(BS,field)       # Shape F H.
-    T = array(BT,field)       # Shape F H.
+    S = array(BS,field)     # Shape F H.
+    T = array(BT,field)     # Shape F H.
     FE = array(jax.numpy.sum(BE[perm].reshape((H,V,D)),axis=2),field) # Shape H V.
-    d3 = zeros((1,F),field)   # Shape 1 F.
-    d2 = (S-T)@(L-R)          # Shape F E.
-    d1 = (L-R).transpose()@FE # Shape E V.
-    d0 = zeros((V,1),field)   # Shape V 1.
+    d3 = zeros((1,F),field) # Shape 1 F.
+    d2 = (S-T)@(L-R)        # Shape F E.
+    d1 = (L-R).t()@FE       # Shape E V.
+    d0 = zeros((V,1),field) # Shape V 1.
     return d3,d2,d1,d0
 
 @jax.jit
 def boundary(d): # d is a tuple of arrays.
     b = True
     for i in range(len(d)-1):
-        b = b & (d[i+1]@d[i]).is_zero()
+        b = b & (d[i+1]@d[i]).vanishes()
     return b
 
 @jax.jit

@@ -2,7 +2,7 @@ import jax
 import functools
 from poppy.constant import DTYPE, POLYNOMIAL, BLOCKSIZE
 from poppy.modular import mulmod, matmulmod, negmod
-from poppy.linear import inv1
+from poppy.linear import inv1, dot33
 
 class field:
     def __init__(self, p, n, inverse = True):    
@@ -59,11 +59,11 @@ class field:
         R = self.BASIS[1]
         Ri = inv1(R, self.INV, BLOCKSIZE)
         DD = jax.numpy.zeros((self.n,self.n,self.n), dtype = DTYPE).at[0,:,:].set((-Ri*A[0])%self.p)
-        def dualscan(b,i):
+        def dual_scan(b,i):
             b = b.at[i].set((Ri@b[i-1]-Ri*A[i])%self.p)
             return b, b[i]
-        DD = jax.lax.scan(dualscan,DD,jax.numpy.arange(1,self.n))[0]
-        C = jax.numpy.tensordot(DD,self.BASIS,axes = ([0,2],[0,1]))%self.p
+        DD = jax.lax.scan(dual_scan,DD,jax.numpy.arange(1,self.n))[0]
+        C = dot33(DD,self.BASIS,self.p)
         Ci = inv1(C, self.INV, BLOCKSIZE)
         D = DD@(Ci.reshape((1,self.n,self.n)))%self.p
         return D   
