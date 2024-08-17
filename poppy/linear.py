@@ -12,43 +12,49 @@ def trace(a,p):
 def dot33(a,b,p):
     # a has shape r n n.
     # b has shape r n n.
-    return jax.numpy.tensordot(a,b, axes = ([0,2],[0,1]))%p # n n.
+    return jax.numpy.einsum('rni,rim->nm',a,b)%p # n n.
+    #return jax.numpy.tensordot(a,b, axes = ([0,2],[0,1]))%p # n n.
 @jax.jit
 def mul32(a,b,p):
     # a has shape r c n.
     # b has shape n n.
-    return jax.numpy.tensordot(a,b, axes = (2,0))%p # r c n.
+    return jax.numpy.einsum('rcm,mn->rcn',a,b)%p # r c n.
+    #return jax.numpy.tensordot(a,b, axes = (2,0))%p # r c n.
 @jax.jit
 def mul53(a,b,p):
     # a has shape b r c n n.
     # b has shape b n n.
-    return jax.numpy.einsum('brcin,bnm->brcim',a,b)%p # b r c n n.
+    return jax.numpy.einsum('brcni,bim->brcnm',a,b)%p # b r c n n.
 @jax.jit
 def matmul44(a,b,p): 
     # a has shape r c n n.
     # b has shape c t n n.
-    return jax.numpy.tensordot(a,b, axes = ([1,3],[0,2])).swapaxes(1,2)%p # r t n n.
+    return jax.numpy.einsum('rcni,ctim->rtnm',a,b)%p # r t n n.
+    #return jax.numpy.tensordot(a,b, axes = ([1,3],[0,2])).swapaxes(1,2)%p # r t n n.
 @jax.jit
 def matmul55(a,b,p):
     # a has shape b r c n n. 
     # b has shape b c t n n.
-    return jax.vmap(matmul44, in_axes = (0,0,None))(a,b,p) # b r t n n.
+    return jax.numpy.einsum('brcni,bctim->brtnm',a,b)%p # b r t n n.
+    #return jax.vmap(matmul44, in_axes = (0,0,None))(a,b,p) # b r t n n.
 @jax.jit
 def matmul34(a,b,p): 
     # a has shape r c n.
     # b has shape c t n n.
-    return jax.numpy.tensordot(a,b, axes = ([1,2],[0,2]))%p # r t n.
+    return jax.numpy.einsum('rci,ctin->rtn',a,b)%p # r t n.
+    #return jax.numpy.tensordot(a,b, axes = ([1,2],[0,2]))%p # r t n.
 @jax.jit
 def matmul45(a,b,p):
     # a has shape b r c n.
     # b has shape b c t n n.
-    return jax.vmap(matmul34, in_axes = (0,0,None))(a,b,p) # b r t n.
+    return jax.numpy.einsum('brci,bctin->brtn',a,b)%p # b r t n.
+    #return jax.vmap(matmul34, in_axes = (0,0,None))(a,b,p) # b r t n.
 @jax.jit
 def outer33(a,b,p):
     # a has shape r n n.
     # b has shape c n n.
-    #return jax.numpy.einsum('jkl,mln->jmkn', a,b)%p
-    return jax.numpy.tensordot(a,b, axes = (2,1)).swapaxes(1,2)%p # r c n n.
+    return jax.numpy.einsum('rni,cim->rcnm', a,b)%p # r c n n.
+    #return jax.numpy.tensordot(a,b, axes = (2,1)).swapaxes(1,2)%p # r c n n.
 
 @jax.jit
 def mtrsm(a,b,p): 

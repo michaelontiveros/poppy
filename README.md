@@ -8,15 +8,15 @@ POPPY `arrays` are `3`-dimensional; they are batches of matrices over `fields`.
 ## Motivation
 
 Arithmetization compiles a computation to a set of combinatorial operations on arithmetic objects (polynomial rings, finitely generated groups, ...). 
-Emerging technologies like zero knowledge proofs, error correcting codes and derandomization, depend on arithmetization. 
+Emerging technologies like zero knowledge proofs, error correcting codes, and derandomization, depend on arithmetization. 
 
 Linearization approximates a computation with a piecewise linear circuit. It is the basis of modern AI. 
 Computer hardware is optimized for linear operations.
 
-[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs automatically, in a variety of constructible and interesting approximations. 
-The resulting program is piecewise linear, over a finite field. Lattice cryptography algorithms are simple linear arithmetic programs. 
+[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs in a variety of constructible and interesting approximations. 
+The resulting programs are piecewise linear over finite fields. Lattice cryptography algorithms are simple linear arithmetic programs. 
 
-POPPY runs linear arithmetic programs much faster than the standard math libraries. 
+POPPY runs linear arithmetic programs faster than other libraries. 
 
 ## Notation
 `q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).

@@ -75,7 +75,9 @@ def boundary(d): # d is a tuple of arrays.
     return b
 
 @jax.jit
-def homology(d): # d is the boundary operator of a chain complex.
+def homology(d): 
+    # Homology groups.
+    # d is the boundary operator of a chain complex.
     H = ()
     ker = d[0].ker()
     for i in range(1,len(d)):
@@ -83,10 +85,12 @@ def homology(d): # d is the boundary operator of a chain complex.
         Hi = ker.mod(im)
         H = H+(Hi,)
         ker = k
-    return H # Homology groups.
+    return H
 
 @jax.jit
-def betti(d): # d is the boundary operator of a chain complex.
+def betti(d): 
+    # Betti numbers.
+    # d is the boundary operator of a chain complex.
     B = ()
     ker = d[0].ker()
     for i in range(1,len(d)):
@@ -94,10 +98,12 @@ def betti(d): # d is the boundary operator of a chain complex.
         Bi = ker.rankmod(im)
         B = B+(Bi,)
         ker = k
-    return B # Betti numbers.
+    return B
 
 @jax.jit
-def euler(d): # d is the boundary operator of a chain complex.
+def euler(d): 
+    # Euler characteristic.
+    # d is the boundary operator of a chain complex.
     X = 0
     ker = d[0].ker()
     for i in range(1,len(d)):
@@ -105,4 +111,4 @@ def euler(d): # d is the boundary operator of a chain complex.
         Bi = ker.rankmod(im)
         X = X-(-1)**(i%2)*Bi
         ker = k
-    return X # Euler characteristic.
+    return X
