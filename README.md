@@ -13,9 +13,10 @@ Emerging technologies like zero knowledge proofs, error correcting codes and der
 Linearization approximates a computation with a piecewise linear circuit. It is the basis of modern AI. 
 Computer hardware is optimized for linear operations.
 
-Modular representation theory linearizes arithmetic programs automatically, in a variety of constructible and interesting approximations. 
-The resulting program is piecewise linear, over a finite field.
-Linear operations over finite fields have become slower than linear operations over floating point numbers. POPPY closes the performance gap.
+[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs automatically, in a variety of constructible and interesting approximations. 
+The resulting program is piecewise linear, over a finite field. Lattice cryptography algorithms are simple linear arithmetic programs. 
+
+POPPY runs linear arithmetic programs much faster than the standard math libraries. 
 
 ## Notation
 `q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
