@@ -55,6 +55,11 @@ def outer33(a,b,p):
     # b has shape c n n.
     return jax.numpy.einsum('rni,cim->rcnm', a,b)%p # r c n n.
     #return jax.numpy.tensordot(a,b, axes = (2,1)).swapaxes(1,2)%p # r c n n.
+@jax.jit
+def outer44(a,b,p):
+    # a has shape b r n n.
+    # b has shape b c n n.
+    return jax.numpy.einsum('brni,bcim->brcnm', a,b)%p # b r c n n.
 
 @jax.jit
 def mtrsm(a,b,p): 

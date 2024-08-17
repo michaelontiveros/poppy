@@ -2,8 +2,9 @@ import jax
 import functools
 from poppy.constant import DTYPE, BLOCKSIZE, SEED
 from poppy.modular import negmod, addmod, submod
-from poppy.linear import matmul34, det, mgetrf, getrf, inv, kerim, gje2
+from poppy.linear import matmul34, trace, det, mgetrf, getrf, inv, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
+from poppy.plot import plot
 
 class array:
     def __init__(self, a, field):
@@ -83,13 +84,13 @@ class array:
         return self.new(mat2vec(det(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def lu(self):
-        return mgetrf(unblock(vec2mat(self.vec,self.field),self.field), self.field.INV, BLOCKSIZE)
+        return mgetrf(unblock(vec2mat(self.vec,self.field)), self.field.INV, BLOCKSIZE)
 
     def lu_block(self):
         return getrf(vec2mat(self.vec, self.field), self.field.INV, BLOCKSIZE)
 
     def inv(self):
-        return self.new(mat2vec(block(inv(unblock(vec2mat(self.vec,self.field), self.field), self.field.INV, BLOCKSIZE),self.field)))
+        return self.new(mat2vec(block(inv(unblock(vec2mat(self.vec,self.field)), self.field.INV, BLOCKSIZE),self.field)))
 
     def rank(self):
         @jax.jit
@@ -141,6 +142,22 @@ class array:
     
     def dirprod(self,b):
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
+
+    def plot(self, title = None, size = 10):
+        title = title if title is not None else self.__repr__().upper()
+        return plot(self.vec, title = title, size = size)
+
+    def plotlift(self, title = None, size = 10):
+        title = title if title is not None else self.__repr__().upper()
+        return plot(self.lift().swapaxes(2,3), title = title, size = size)
+
+    def plotproj(self, title = None, size = 10):
+        title = title if title is not None else self.__repr__().upper()
+        return plot(self.proj(), title = title, size = size)
+    
+    def plottrace(self, title = None, size = 10):
+        title = title if title is not None else self.__repr__().upper()
+        return plot(trace(self.lift(),self.field.p), title = title, size = size)
 
 # BEGIN REGISTER ARRAY
 def flatten_array(a):

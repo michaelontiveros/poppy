@@ -13,10 +13,10 @@ def block(a,f):
     n = f.n 
     return a.reshape(s[:-2]+(s[-2]//n,n, s[-1]//n,n)).swapaxes(-2,-3)
 
-@functools.partial(jax.jit, static_argnums = 1)
-def unblock(a,f):
+@jax.jit
+def unblock(a):
     s = a.shape
-    n = f.n
+    n = s[-1]
     return a.swapaxes(-2,-3).reshape(s[:-4]+(s[-4]*n, s[-3]*n))
 # END RESHAPE
 
