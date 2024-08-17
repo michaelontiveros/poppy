@@ -1,13 +1,23 @@
-# Introduction
+## Introduction
 POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields.
 
 POPPY has a `field` class, and an `array` class. 
 
-POPPY `arrays` are `3`-dimensional; they are batches of matrices over `fields`. 
+POPPY `arrays` are `3`-dimensional; they are batches of matrices over `fields`.
 
+## Motivation
 
+Arithmetization compiles a computation to a set of combinatorial operations on arithmetic objects (polynomial rings, finitely generated groups, ...). 
+Emerging technologies like zero knowledge proofs, error correcting codes and derandomization, depend on arithmetization. 
 
-# Notation
+Linearization approximates a computation with a piecewise linear circuit. It is the basis of modern AI. 
+Computer hardware is optimized for linear operations.
+
+Modular representation theory linearizes arithmetic programs automatically, in a variety of constructible and interesting approximations. 
+The resulting program is piecewise linear, over a finite field.
+Linear operations over finite fields have become slower than linear operations over floating point numbers. POPPY closes the performance gap.
+
+## Notation
 `q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
 
 `y = y_q` is the Conway polynomial. 
@@ -18,12 +28,13 @@ POPPY `arrays` are `3`-dimensional; they are batches of matrices over `fields`.
 
 `X = X_y` is an `n x n` matrix root of the polynomial `y`.
 
+## Linear Representation
+POPPY represents the finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. 
+It extends linearly to a faithful `mod p` representation 
+of the matrix algebra `M_k( F )`. A matrix `mod p` is a `2`-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. 
+The `jax.numpy.mod()` function reduces integer arrays `mod p`.
 
-# Linear Representation
-POPPY represents the finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. It extends linearly to a faithful `mod p` representation 
-of the matrix algebra `M_k( F )`. A matrix `mod p` is a `2`-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer arrays `mod p`.
-
-# Performance
+## Performance
 
 `q = 12421^3`.
  
