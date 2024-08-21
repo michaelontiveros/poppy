@@ -43,28 +43,32 @@ def unique(V,D,a):
     return jax.numpy.unique(jax.vmap(unique_jit, in_axes = (None,None,1))(V,D,a), axis = 0)
 
 def graph(degree,perm,field): # The coboundary operator of an orientable regular ribbon graph.
-    D = degree 
-    perm = jax.numpy.array(perm, dtype = DTYPE)
-    H = len(perm)                            # Number of half-edges.
-    V = H//D                                 # Number of vertices.
-    RE = jax.numpy.arange(H)                 # Edge representatives.
-    BE = jax.numpy.eye(H, dtype = DTYPE)     # Edge basis.
-    L = array(BE[:,perm[:H//2]],field)       # Left edges.
-    R = array(BE[:,perm[H//2:]],field)       # Right edges.
-    RF = unique(V, D, orbit(V, D, RE, perm)) # Face representatives.
-    F = len(RF)                              # Number of faces.
-    RS = jax.numpy.arange(F)[:,None]         # Source face representatives.
-    RT = rotation(V,D)                       # Target face representatives.
-    BF = jax.numpy.eye(F, dtype = DTYPE)     # Face basis.
-    BS = BF[:,RE.at[RF].set(RS)]             # Source face basis.
-    BT = BS[:,RT]                            # Target face basis.
-    S = array(BS,field)     # Shape F H.
-    T = array(BT,field)     # Shape F H.
-    FE = array(jax.numpy.sum(BE[perm].reshape((H,V,D)),axis=2),field) # Shape H V.
-    d3 = zeros((1,F),field) # Shape 1 F.
-    d2 = (S-T)@(L-R)        # Shape F E.
-    d1 = (L-R).t()@FE       # Shape E V.
-    d0 = zeros((V,1),field) # Shape V 1.
+    perm = jax.numpy.array(perm, dtype = DTYPE) # Half-edge identifications.
+    H = len(perm) # Number of half-edges.
+    E = H//2      # Number of edges
+    D = degree    # Vertex degree.
+    V = H//D      # Number of vertices.
+    RE = jax.numpy.arange(H)             # Edge representatives.
+    RF = unique(V,D, orbit(V,D,RE,perm)) # Face representatives.
+    F = len(RF)   # Number of faces.
+    RS = jax.numpy.arange(F)[:,None]     # Source face representatives.
+    RT = rotation(V,D)                   # Target face representatives.
+    BF = jax.numpy.eye(F, dtype = DTYPE)                 # Face basis.
+    BS = BF[:,RE.at[RF].set(RS)]                         # Source face basis.
+    BT = BS[:,RT]                                        # Target face basis.
+    BE = jax.numpy.eye(H, dtype = DTYPE)                 # Edge basis.
+    BV = jax.numpy.sum(BE[perm].reshape((H,V,D)),axis=2) # Vertex basis.
+    L = array(BE[:,perm[:E]],field) # Left half-edges.  H E.
+    R = array(BE[:,perm[E:]],field) # Right half-edges. H E.
+    S = array(BS,field)             # Source faces.     F H.
+    T = array(BT,field)             # Target faces.     F H.
+    dV = array(BV,field)    # H V.
+    dE = L-R                # H E.
+    dF = S-T                # F H.
+    d3 = zeros((1,F),field) # 1 F.
+    d2 = dF@dE              # F E.
+    d1 = dE.t()@dV          # E V.
+    d0 = zeros((V,1),field) # V 1.
     return d3,d2,d1,d0
 
 @jax.jit
