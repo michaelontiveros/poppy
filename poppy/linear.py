@@ -4,9 +4,15 @@ from poppy.constant import DTYPE, BLOCKSIZE
 from poppy.modular import matmulmod
 
 @jax.jit
-def trace(a,p): 
+def trace(a,p):
+    # Field trace.
     # a has shape b r c n n.
     return jax.numpy.trace(a, axis1 = -2, axis2 = -1)%p # b r c.
+@jax.jit
+def trace4(a,p):
+    # Matrix trace.
+    # a has shape b r c n.
+    return jax.numpy.trace(a, axis1 = 1, axis2 = 2)%p # b n.
 
 @jax.jit
 def dot33(a,b,p):
@@ -25,6 +31,11 @@ def mul53(a,b,p):
     # a has shape b r c n n.
     # b has shape b n n.
     return jax.numpy.einsum('brcni,bim->brcnm',a,b)%p # b r c n n.
+@jax.jit
+def mul45(a,b,p):
+    # a has shape b r c n.
+    # b has shape b r c n n.
+    return jax.numpy.einsum('brci,brcin->brcn',a,b)%p
 @jax.jit
 def matmul44(a,b,p): 
     # a has shape r c n n.

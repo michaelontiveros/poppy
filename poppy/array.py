@@ -2,7 +2,7 @@ import jax
 import functools
 from poppy.constant import DTYPE, BLOCKSIZE, SEED
 from poppy.modular import negmod, addmod, submod
-from poppy.linear import matmul34, trace, det, mgetrf, getrf, inv, kerim, gje2
+from poppy.linear import mul45, matmul34, trace4, trace, det, mgetrf, getrf, inv, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
 from poppy.plot import plot
 
@@ -54,7 +54,7 @@ class array:
     
     def __mul__(self, a):
         a = array(a,self.field) if type(a) == int else a
-        return self.new((jax.numpy.expand_dims(self.vec,3)@vec2mat(a.vec,a.field))[:,:,:,0,:]%self.field.p)
+        return self.new(mul45(self.vec,vec2mat(a.vec,a.field),self.field.p))
     def __rmul__(self, a):
         return self.__mul__(a)
     
@@ -78,7 +78,7 @@ class array:
         return jax.vmap(test)(self.vec)
 
     def trace(self):  
-        return self.new(jax.numpy.trace(self.vec, axis1 = 1, axis2 = 2)%self.field.p)
+        return self.new(trace4(self.vec,self.field.p))
 
     def det(self):
         return self.new(mat2vec(det(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
