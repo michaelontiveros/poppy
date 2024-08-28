@@ -3,7 +3,7 @@ import functools
 from poppy.constant import DTYPE, POLYNOMIAL
 from poppy.field import field
 from poppy.ring import Z2, M2
-from poppy.group import psl2mod, pgl2mod 
+from poppy.gl2 import psl2mod, pgl2mod 
 
 @functools.partial(jax.jit, static_argnums = 0)
 def pS1(p): # A point on the circle x*x + y*y = (p-1) mod p.

@@ -7,7 +7,7 @@ from poppy.modular import addmod, submod, mulmod
 from poppy.linear import trace, outer33, outer44, matmul55, mtrsm, trsm, mgetrf, getrf, gje2, inv, kerim
 from poppy.rep import transpose, block, unblock, int2vec, vec2int, int2mat, mat2int, vec2mat, mat2vec, rep
 from poppy.ring import Z2, M2
-from poppy.group import gl2, sl2, pgl2, pgl2mod, psl2, psl2mod, decode
+from poppy.gl2 import gl2, sl2, pgl2, pgl2mod, psl2, psl2mod, decode
 from poppy.expander import lps
 from poppy.topology import polygon, graph, boundary, homology, betti, euler
 from poppy.plot import plot
