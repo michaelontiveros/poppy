@@ -92,9 +92,9 @@ def mtrsm(a,b,p):
     return mtrsm_vmap(b.T).T
 
 @jax.jit
-def mgetrf2(aperm,inverse): 
+def mgetrf2(aprm,inverse): 
     # Sequential lu decomposition mod p.
-    r,c = aperm.shape
+    r,c = aprm.shape
     p = 1+inverse[-1] # inverse has shape p.
     I = jax.numpy.arange(r)
     J = jax.numpy.arange(c-1)
@@ -105,7 +105,7 @@ def mgetrf2(aperm,inverse):
         ap = ap.at[:,i].set(jax.numpy.where(I>i,(ap[:,i]*inverse[ap[i,i]])%p,ap[:,i]))  # Scale column i.
         ap = ap.at[:,:-1].set((ap[:,:-1]-jax.numpy.where((I[:,None]>i)&(J[None,:]>i),jax.numpy.outer(ap[:,i],ap[i,:-1]),0))%p) # Update block.     
         return ap,i
-    return jax.lax.scan(eliminate, aperm,R, unroll = False)[0]
+    return jax.lax.scan(eliminate, aprm,R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def mgetrf1(a,inverse,bs): 
@@ -114,11 +114,11 @@ def mgetrf1(a,inverse,bs):
     r,c = a.shape
     p = 1+inverse[-1] # inverse has shape p.
     m = min(r,c)
-    perm = jax.numpy.arange(r)
+    prm = jax.numpy.arange(r)
     for i in range(0,m,bs):
         bb = min(m-i,bs)
         ap = mgetrf2(jax.numpy.hstack([a[i:,i:i+bb],jax.numpy.arange(i,r).reshape((-1,1))]), inverse)
-        perm = perm.at[i:].set(perm[ap[:,-1]]) # Update permutation.
+        prm = prm.at[i:].set(prm[ap[:,-1]]) # Update permutation.
         a = a.at[i:,:].set(a[ap[:,-1],:]) # Swap rows.
         a = a.at[i:,i:i+bb].set(ap[:,:-1])  # Update block C.
         a = a.at[i:i+bb,i+bb:].set(mtrsm(a[i:i+bb,i:i+bb], a[i:i+bb,i+bb:], p)) # Update block B.
@@ -126,9 +126,9 @@ def mgetrf1(a,inverse,bs):
     l = jax.numpy.fill_diagonal(jax.numpy.tril(a), 1, inplace = False)
     u = jax.numpy.tril(a.T).T
     d = jax.numpy.diagonal(u)
-    iperm = jax.numpy.arange(r)
-    iperm = iperm.at[perm].set(iperm)  
-    return l,u,d,iperm
+    iprm = jax.numpy.arange(r)
+    iprm = iprm.at[prm].set(iprm)  
+    return l,u,d,iprm
 
 # Batched blocked lu decomposition mod p.
 mgetrf = jax.vmap(mgetrf1, in_axes = (0,None,None))
@@ -142,11 +142,11 @@ def inv1(a,i,bs):
         return i[a[0,0]].reshape((1,1))
     p = 1+i[-1]
     I = jax.numpy.eye(r, dtype = DTYPE)
-    l,u,d,iperm = mgetrf1(a,i,bs)
+    l,u,d,iprm = mgetrf1(a,i,bs)
     D = i[d]
     L = mtrsm(l,I,p) # L = 1/l.
     U = mtrsm((D*u%p).T,D*I,p).T # U = 1/u.      
-    return (U@L%p)[:,iperm]
+    return (U@L%p)[:,iprm]
 
 def inv(a,i,bs): 
     # Batched matrix inverse mod p.
@@ -158,11 +158,11 @@ def inv(a,i,bs):
     p = 1+i[-1]
     I = jax.numpy.eye(r, dtype = DTYPE)
     def inverse(A):
-        l,u,d,iperm = mgetrf1(A,i,bs)
+        l,u,d,iprm = mgetrf1(A,i,bs)
         D = i[d]
         L = mtrsm(l,I,p) # L = 1/l.
         U = mtrsm((D*u%p).T,D*I,p).T # U = 1/u.      
-        return (U@L%p)[:,iperm]
+        return (U@L%p)[:,iprm]
     return jax.vmap(inverse)(a)
 
 @jax.jit
@@ -187,25 +187,25 @@ def trsm(a,b,p):
     return trsm_vmap(b.swapaxes(0,1)).swapaxes(0,1)
 
 @jax.jit
-def getrf2(aperm,inverse): 
+def getrf2(aprm,inverse): 
     # Sequential lu decomposition over a finite field.
-    a,perm,parity = aperm
+    a,prm,parity = aprm
     r,c,n,n = a.shape
     p = 1+inverse[-1] # p is the field characteristic.
     I = jax.numpy.arange(r).reshape((-1,1,1,1))
     J = jax.numpy.arange(c).reshape((1,-1,1,1))
     R = jax.numpy.arange(min(r,c))
     def eliminate(ap, i):
-        a, perm, parity = ap # perm has shape r. parity has shape 1.
+        a, prm, parity = ap # prm has shape r. parity has shape 1.
         ai = a[:,i,:,:].reshape((r,-1)).max(axis = 1)
         j = jax.numpy.argmax(jax.numpy.where(I[:,0,0,0] >= i, ai, -1)) # Search column i for j.
         a = a.at[[i,j],:,:,:].set(a[[j,i],:,:,:]) # Swap rows i and j.
-        perm = perm.at[[i,j],].set(perm[[j,i],]) # Record swap.
+        prm = prm.at[[i,j],].set(prm[[j,i],]) # Record swap.
         a = a.at[:,i,:,:].set(jax.numpy.where(I[:,:,:,0]>i,mul32(a[:,i,:,:],inv1(a[i,i,:,:],inverse,BLOCKSIZE),p),a[:,i,:,:])) # Scale column i.
         a = a.at[:,:,:,:].set((a - jax.numpy.where((I > i)&(J > i), outer33(a[:,i,:,:],a[i,:,:,:],p), 0))%p) # Update block.   
         parity = (parity + jax.numpy.count_nonzero(i-j)) % 2
-        return (a,perm,parity), j
-    return jax.lax.scan(eliminate, aperm, R, unroll = False)[0]
+        return (a,prm,parity), j
+    return jax.lax.scan(eliminate, aprm, R, unroll = False)[0]
 
 @functools.partial(jax.jit, static_argnums = 2)
 def getrf1(a,inverse,bs): 
@@ -215,14 +215,14 @@ def getrf1(a,inverse,bs):
     r,c,n,_ = a.shape
     m = min(r,c)
     R = jax.numpy.arange(r)
-    perm = jax.numpy.arange(r)
+    prm = jax.numpy.arange(r)
     parity = jax.numpy.zeros(1, dtype = DTYPE)
     for i in range(0, m, bs):
         bb = min(m-i, bs)
-        ai, permi, pari = getrf2((a[i:,i:i+bb,:,:], R[i:], 0), inverse) # a has shape r-i bb n n. R has shape r-i.
+        ai, prmi, pari = getrf2((a[i:,i:i+bb,:,:], R[i:], 0), inverse) # a has shape r-i bb n n. R has shape r-i.
         parity = (parity+pari)%2
-        perm = perm.at[i:].set(perm[permi])
-        a = a.at[i:,:,:,:].set(a[permi,:,:,:]) # Swap rows.
+        prm = prm.at[i:].set(prm[prmi])
+        a = a.at[i:,:,:,:].set(a[prmi,:,:,:]) # Swap rows.
         a = a.at[i:,i:i+bb,:,:].set(ai)  # Update block C.
         a = a.at[i:i+bb,i+bb:,:,:].set(trsm(a[i:i+bb,i:i+bb,:,:],a[i:i+bb,i+bb:,:,:],p)) # Update block B.
         a = a.at[i+bb:,i+bb:,:,:].set((a[i+bb:,i+bb:,:,:]-matmul44(a[i+bb:,i:i+bb,:,:],a[i:i+bb,i+bb:,:,:],p))%p) # Update block D.
@@ -233,9 +233,9 @@ def getrf1(a,inverse,bs):
     l = jax.numpy.where(i == j, I, l)
     u = jax.numpy.where(i <= j, a, 0)
     d = jax.numpy.diagonal(a, offset = 0, axis1 = 0, axis2 = 1).swapaxes(0,2).swapaxes(1,2)
-    iperm = jax.numpy.arange(r)
-    iperm = iperm.at[perm].set(iperm)  
-    return l,u,d,iperm,parity
+    iprm = jax.numpy.arange(r)
+    iprm = iprm.at[prm].set(iprm)  
+    return l,u,d,iprm,parity
 
 # Batched blocked lu decomposition over a finite field.
 getrf = jax.vmap(getrf1, in_axes = (0, None, None))
@@ -249,7 +249,7 @@ def det(a,i,p,bs):
     def mul(A,B):
         return matmulmod(A,B,p)
     def det1(A):
-        l,u,d,iperm,parity = getrf1(A,i,bs)
+        l,u,d,iprm,parity = getrf1(A,i,bs)
         return jax.numpy.power(-1, parity) * jax.lax.associative_scan(mul,d)[-1]% p
     return jax.vmap(det1)(a)
 
@@ -290,14 +290,17 @@ def gje2(apiv,inverse):
         a = a.at[:,i,:,:,:].set(mul53(a[:,i,:,:,:], inv(d, inverse, BLOCKSIZE),p)) # Scale row i.
         a = jax.vmap(updateblock, in_axes = (0,0,None))(a,i,j)
         return (a, piv), i
-    def permute(a,sgnpiv):
-        perm = jax.numpy.argsort(sgnpiv, axis = 0, descending = True)
-        rank = jax.numpy.sum(sgnpiv)
-        rref = a[perm[:r],:,:,:][:,perm,:,:]
-        return perm,rank,rref
+    def pivcol(pv):
+        mx = jax.numpy.max(pv)
+        return jax.numpy.zeros(c, dtype = DTYPE).at[pv-1].set(jax.numpy.sign(jax.numpy.arange(1,c+1)%c)).at[-1].set(jax.numpy.where(mx==c,1,0))
+    def permute(a,pv):
+        prm = jax.numpy.argsort(pv, axis = 0, descending = True)
+        rank = jax.numpy.sum(pv)
+        rref = a[:,prm,:,:]
+        return prm,rank,rref
     a,piv = jax.lax.scan(eliminate, apiv, jax.numpy.arange(c), unroll = False)[0] # Scan the columns of a.
-    perm,rank,rref = jax.vmap(permute)(a,jax.numpy.sign(piv)) # Move the pivots to the front of a.
-    return piv,perm,rank,rref
+    prm,rank,rref = jax.vmap(permute)(a,jax.vmap(pivcol)(piv)) # Move the pivots to the front of a.
+    return piv,prm,rank,rref
 
 @jax.jit
 def kerim(a,f): 
@@ -305,7 +308,7 @@ def kerim(a,f):
     b,r,c,n,_ = a.shape
     m = min(r,c)
     apiv = (a, jax.numpy.zeros((b,c), dtype = DTYPE))
-    piv,perm,rank,rref = gje2(apiv,f.INV)
+    piv,prm,rank,rref = gje2(apiv,f.INV)
     rank =             rank.reshape((b,1,1,1,1))
     I = jax.numpy.arange(c).reshape((1,c,1,1,1))
     J = jax.numpy.arange(c).reshape((1,1,c,1,1))
@@ -316,9 +319,11 @@ def kerim(a,f):
     ker = ker.at[:,:m,:,:,:].set(jax.numpy.where(J >= rank, -rref[:,:m,:,:,:],0))%f.p
     ker = ker.at[:,:,:,:,:].set(jax.numpy.where((J >= rank)&(I == J)&(i == j), 1,ker))
     iim = iim.at[:,:m,:,:,:].set(jax.numpy.where((I[:,:m] < rank)&(J < rank), rref[:,:m,:,:,:],0))
-    def swap(ki,pm):
-        return ki[pm]
-    ker = jax.vmap(swap)(ker,perm)
-    iim = jax.vmap(swap)(iim,perm)
+    def swaprows(ki,pm):
+        return ki.at[pm].set(ki[I.squeeze()])
+    def swapcols(ki,pm):
+        return ki[:,pm]
+    ker = jax.vmap(swaprows)(ker,prm)
+    a = jax.vmap(swapcols)(a,prm)
     im = matmul55(a,iim,f.p)
-    return ker,im,rank
+    return ker,im,rank,prm

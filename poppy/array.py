@@ -72,6 +72,32 @@ class array:
     def t(self):
         return self.new(self.vec.swapaxes(1,2))
 
+    def ravel(self):
+        return self.new(self.vec.reshape((self.shape[0],-1,1,self.field.n)))
+
+    def reshape(self,shape):
+        return self.new(self.vec.reshape((shape[0],shape[1],shape[2],self.field.n)))
+    
+    def concatenate(self):
+        return self.new(self.vec.swapaxes(0,2))
+
+    def separate(self):
+        return self.new(self.vec.swapaxes(0,2))
+
+    def hstack(self, a):
+        return self.new(jax.numpy.concatenate([self.vec, a.vec], axis = 2))
+
+    def stack(self, a):
+        return self.new(jax.numpy.concatenate([self.vec, a.vec], axis = 0))
+
+    def sum(self):
+        return self.new(self.vec.sum(axis = 0, keepdims = True)%self.field.p)
+
+    def duplicate(self,d):
+        b,r,c = self.shape
+        n = self.field.n
+        return self.new(jax.numpy.tile(self.vec,d).reshape((b,r,c,d,n)).swapaxes(2,3).swapaxes(1,2).reshape((b*d,r,c,n)))
+
     def vanishes(self):
         def test(a):
             return jax.numpy.count_nonzero(a) == 0
@@ -100,10 +126,15 @@ class array:
         return jax.numpy.count_nonzero(unique(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
 
     def kerim(self):
-        k,i,rank = kerim(self.lift(),self.field)
+        k,i,rank,prm = kerim(self.lift(),self.field)
         ker = self.new(mat2vec(k))
         im = self.new(mat2vec(i))
         return ker,im
+
+    def imprm(self):
+        k,i,rank,prm = kerim(self.lift(),self.field)
+        im = self.new(mat2vec(i))
+        return im,prm
 
     def ker(self):
         return self.kerim()[0]
@@ -143,21 +174,21 @@ class array:
     def dirprod(self,b):
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
 
-    def plot(self, title = None, size = 10):
+    def plot(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
         title = title if title is not None else self.__repr__().upper()
-        return plot(self.vec, title = title, size = size)
+        return plot(self.vec, title = title, size = size, dpi = dpi, cmap = cmap)
 
-    def plotlift(self, title = None, size = 10):
+    def plotlift(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
         title = title if title is not None else self.__repr__().upper()
-        return plot(self.lift().swapaxes(2,3), title = title, size = size)
+        return plot(self.lift().swapaxes(2,3), title = title, size = size, dpi = dpi, cmap = cmap)
 
-    def plotproj(self, title = None, size = 10):
+    def plotproj(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
         title = title if title is not None else self.__repr__().upper()
-        return plot(self.proj(), title = title, size = size)
+        return plot(self.proj(), title = title, size = size, dpi = dpi, cmap = cmap)
     
-    def plottrace(self, title = None, size = 10):
+    def plottrace(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
         title = title if title is not None else self.__repr__().upper()
-        return plot(trace(self.lift(),self.field.p), title = title, size = size)
+        return plot(trace(self.lift(),self.field.p), title = title, size = size, dpi = dpi, cmap = cmap)
 
 # BEGIN REGISTER ARRAY
 def flatten_array(a):

@@ -1,11 +1,16 @@
 import jax
 import functools
 
+@functools.partial(jax.jit, static_argnums = (0,1))
+def ZZ(m,n): # The finite ring Z/m x Z/n.
+    Zm = jax.numpy.arange(m)
+    Zn = jax.numpy.arange(n)
+    ZmZn = jax.numpy.array([jax.numpy.tile(Zm,n), jax.numpy.repeat(Zn,m)]).T
+    return ZmZn
+
 @functools.partial(jax.jit, static_argnums = 0)
 def Z2(q): # The finite ring Z/q x Z/q.
-    Zq = jax.numpy.arange(q)
-    Z2q = jax.numpy.array([jax.numpy.tile(Zq,q), jax.numpy.repeat(Zq,q)]).T
-    return Z2q
+    return ZZ(q,q)
 
 @functools.partial(jax.jit, static_argnums = 0)
 def M2(q): # The finite ring M_2( Z/q ).
