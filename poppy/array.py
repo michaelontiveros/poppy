@@ -17,7 +17,7 @@ class array:
         elif len(a.shape) == 2:
             a = a.reshape((1,a.shape[0],a.shape[1]))
         elif len(a.shape) > 3:
-            print('ERROR: poppy arrays are three dimensional.')
+            print('ERROR: POPPY ARRAYS ARE THREE DIMENSIONAL.')
             return
         self.field = field 
         self.shape = a.shape
@@ -32,7 +32,7 @@ class array:
         return a
 
     def __repr__(self):
-        return f'shape {self.shape[0]} {self.shape[1]} {self.shape[2]} over ' + repr(self.field) 
+        return f'SHAPE {self.shape[0]} {self.shape[1]} {self.shape[2]} OVER ' + repr(self.field) 
 
     def __getitem__(self,i):
         return self.new(self.vec[i])
@@ -183,19 +183,19 @@ class array:
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
 
     def plot(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
-        title = title if title is not None else self.__repr__().upper()
+        title = title if title is not None else self.__repr__()
         return plot(self.vec, title = title, size = size, dpi = dpi, cmap = cmap)
 
     def plotlift(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
-        title = title if title is not None else self.__repr__().upper()
+        title = title if title is not None else self.__repr__()
         return plot(self.lift().swapaxes(2,3), title = title, size = size, dpi = dpi, cmap = cmap)
 
     def plotproj(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
-        title = title if title is not None else self.__repr__().upper()
+        title = title if title is not None else self.__repr__()
         return plot(self.proj(), title = title, size = size, dpi = dpi, cmap = cmap)
     
     def plottrace(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
-        title = title if title is not None else self.__repr__().upper()
+        title = title if title is not None else self.__repr__()
         return plot(trace(self.lift(),self.field.p), title = title, size = size, dpi = dpi, cmap = cmap)
 
 # BEGIN REGISTER ARRAY

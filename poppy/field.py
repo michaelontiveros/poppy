@@ -14,7 +14,7 @@ class field:
         self.DUAL = self.dual()   # Dual basis.
 
     def __repr__(self):
-        return f'field {self.q}'
+        return f'FIELD {self.q}'
      
     def inv(self):
         @jax.jit
