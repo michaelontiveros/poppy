@@ -93,6 +93,14 @@ class array:
     def sum(self):
         return self.new(self.vec.sum(axis = 0, keepdims = True)%self.field.p)
 
+    def mul(self):
+        @jax.jit
+        def mul_scan(a,b):
+            c = matmul34(a,vec2mat(b,self.field),self.field.p)
+            return c,c
+        vec = jax.lax.scan(mul_scan,eye(self.shape[1],self.field).vec[0],self.vec)[0]
+        return self.new(jax.numpy.expand_dims(vec,0))
+
     def duplicate(self,d):
         b,r,c = self.shape
         n = self.field.n

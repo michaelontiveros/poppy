@@ -1,5 +1,6 @@
 import jax
 import functools
+from poppy.constant import DTYPE
 from poppy.ring import Z2, ZZ
 from poppy.array import array, zeros
 
@@ -254,3 +255,33 @@ def bas2rep(bas,c,f): # The symmetric group representation over the Specht modul
 def symrep(prt,f): # The symmetric group representation.
   bas,c = prt2bas(prt,f)
   return bas2rep(bas,c,f)
+
+def int2trp1(i,n):
+  j = i//n
+  k = i%n
+  return jax.numpy.array([j,k], dtype = jax.numpy.int8)
+
+def int2trp(i,n):
+  return jax.vmap(int2trp1, in_axes = (0,None))(i,n)
+
+def trp2int1(t,n):
+  j = t[1]
+  k = t[0]
+  return j+k*n
+
+def trp2int(t,n):
+  return jax.vmap(trp2int1, in_axes = (0,None))(t,n)
+
+def symreptbl(symrep,n):
+  N = factorial(n)
+  I = jax.numpy.arange(N)
+  prm = int2prm(I,n)
+  dim = symrep.shape[1]
+  rep = jax.numpy.zeros((N,dim,dim), dtype = DTYPE)
+  for i in range(N):
+    trp = prm2trp(prm[i])
+    indices = trp2int(trp,n)
+    rep = rep.at[i].set(symrep[indices].mul().proj()[0])
+  tbl = symtbl(n,N).ravel()
+  reptbl = array(rep[tbl],symrep.field)
+  return reptbl # N*N dim dim
