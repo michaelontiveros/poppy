@@ -1,7 +1,7 @@
 import jax
 import functools
 from poppy.constant import DTYPE, BLOCKSIZE, SEED
-from poppy.modular import negmod, addmod, submod
+from poppy.modular import negmod, addmod, submod, mulmod
 from poppy.linear import mul45, matmul34, trace4, trace, det, mgetrf, getrf, inv, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
 from poppy.plot import plot
@@ -50,11 +50,11 @@ class array:
         a = array(a,self.field) if type(a) == int else a
         return self.new(submod(self.vec, a.vec, self.field.p))
     def __rsub__(self, a):
-        return self.__sub__(a)
+        return self.new(-self.vec).__add__(a)
     
     def __mul__(self, a):
-        a = array(a,self.field) if type(a) == int else a
-        return self.new(mul45(self.vec,vec2mat(a.vec,a.field),self.field.p))
+        b = mul45(self.vec,vec2mat(a.vec,a.field),self.field.p) if type(a) == array else mulmod(self.vec,a,self.field.p)
+        return self.new(b)
     def __rmul__(self, a):
         return self.__mul__(a)
     
@@ -217,7 +217,7 @@ def zeros(shape,field):
 def ones(shape,field):
     return array(jax.numpy.ones(shape, dtype = DTYPE), field)
 def arange(n,field):
-    return array(jax.numpy.arange(n, dtype = DTYPE).reshape((1,1,n))%field.q, field)
+    return array(jax.numpy.arange(n, dtype = DTYPE).reshape((n,1,1))%field.q, field)
 def eye(shape,field):
     return array(jax.numpy.eye(shape, dtype = DTYPE), field)
 # END NAMED ARRAYS 
