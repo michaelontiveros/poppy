@@ -17,15 +17,12 @@ class field:
         return f'FIELD {self.q}'
      
     def inv(self):
-        @jax.jit
         def mul(a,b):
             return mulmod(a, b, self.p)
-        @functools.partial(jax.jit, static_argnums = 1)
         def inv_jit(ABC, i):
             C = mul(ABC[i-2, 0], ABC[i-2, 2])
             ABC = ABC.at[i-1, 2].set(C)   
             return ABC, mul(ABC[i-1, 1], C)
-        @jax.jit
         def inv_scan():    
             A = jax.numpy.arange(1, self.p, dtype = DTYPE)
             AA = jax.numpy.concatenate([jax.numpy.ones(1, dtype = DTYPE), jax.numpy.flip(A[1:])])
@@ -36,14 +33,11 @@ class field:
         return inv_scan()
    
     def basis(self):
-        @jax.jit
         def id(a,i):
             return a
         stack = jax.vmap(id, (None,0))
-        @jax.jit
         def neg(a):
             return negmod(a, self.p)
-        @jax.jit
         def matmul(a,b):
             return matmulmod(a,b, self.p)
         # V is the vector of subleading coefficients of the irreducible polynomial.

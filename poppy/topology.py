@@ -45,23 +45,23 @@ def unique(V,D,a):
 def graph(degree,prm,field): # The coboundary operator of an orientable regular ribbon graph.
     prm = jax.numpy.array(prm, dtype = DTYPE) # Half-edge identifications.
     H = len(prm) # Number of half-edges.
-    E = H//2      # Number of edges
-    D = degree    # Vertex degree.
-    V = H//D      # Number of vertices.
+    E = H//2     # Number of edges
+    D = degree   # Vertex degree.
+    V = H//D     # Number of vertices.
     RE = jax.numpy.arange(H)             # Edge representatives.
-    RF = unique(V,D, orbit(V,D,RE,prm)) # Face representatives.
-    F = len(RF)   # Number of faces.
+    RF = unique(V,D, orbit(V,D,RE,prm))  # Face representatives.
+    F = len(RF)  # Number of faces.
     RS = jax.numpy.arange(F)[:,None]     # Source face representatives.
     RT = rotation(V,D)                   # Target face representatives.
-    BF = jax.numpy.eye(F, dtype = DTYPE)                 # Face basis.
-    BS = BF[:,RE.at[RF].set(RS)]                         # Source face basis.
-    BT = BS[:,RT]                                        # Target face basis.
-    BE = jax.numpy.eye(H, dtype = DTYPE)                 # Edge basis.
+    BF = jax.numpy.eye(F, dtype = DTYPE)                # Face basis.
+    BS = BF[:,RE.at[RF].set(RS)]                        # Source face basis.
+    BT = BS[:,RT]                                       # Target face basis.
+    BE = jax.numpy.eye(H, dtype = DTYPE)                # Edge basis.
     BV = jax.numpy.sum(BE[prm].reshape((H,V,D)),axis=2) # Vertex basis.
     L = array(BE[:,prm[:E]],field) # Left half-edges.  H E.
     R = array(BE[:,prm[E:]],field) # Right half-edges. H E.
-    S = array(BS,field)             # Source faces.     F H.
-    T = array(BT,field)             # Target faces.     F H.
+    S = array(BS,field)            # Source faces.     F H.
+    T = array(BT,field)            # Target faces.     F H.
     dV = array(BV,field)    # H V.
     dE = L-R                # H E.
     dF = S-T                # F H.
