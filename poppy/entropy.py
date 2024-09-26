@@ -1,9 +1,9 @@
 import jax
 from poppy.array import zeros, ones
 
-@jax.jit
+# Maxim Kontsevich: The 1.5-logarithm. 1995
+# Jean-Louis Cathelineau: Infinitesimal dilogarithms, extensions and cohomology. 2011
 def entropy(x):
-# https://arxiv.org/abs/math/0008089
   @jax.jit
   def sum(sy,i):
     s,y = sy
@@ -12,4 +12,7 @@ def entropy(x):
     return (s,y),i
   b = x.shape[0]
   f = x.field
-  return jax.lax.scan(sum,(zeros(b,f),ones(b,f)),f.INV[1:])[0][0]
+  z = jax.lax.scan(sum,(zeros(b,f),ones(b,f)),f.INV[1:])[0][0]
+  for i in range(1,x.field.n):
+    z = z.frb()
+  return z

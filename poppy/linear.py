@@ -267,7 +267,7 @@ def gje2(apiv,inverse):
         i = jax.numpy.where(i==c, 0,i)
         i = jax.numpy.where(i>=r, r-1,i)
         return i
-    def searchcol(aj,i): # search column j below row i for index k.  
+    def searchcol(aj,i): # Search column j below row i for index k.  
         return jax.numpy.argmax(jax.numpy.where(I.reshape((1,-1)) >= i, aj, -1), axis = 1)
     def swaprows(a,i,j):
         return a.at[[i,j],:,:,:].set(a[[j,i],:,:,:])
@@ -277,18 +277,23 @@ def gje2(apiv,inverse):
         return jax.numpy.where(J.squeeze() >= r, 0, pv)
     def extractpiv(pv,a,i,j):
         return jax.numpy.where(pv[i,None,None] != 0, a[i,j,:,:],jax.numpy.eye(n,dtype = DTYPE)[None,:,:])
+    def scalerow(a,i,d):
+        return a.at[:,i,:,:,:].set(mul53(a[:,i,:,:,:], inv(d, inverse, BLOCKSIZE),p))
     def updateblock(a,i,j):
-        return a.at[:,:,:,:].set((a-jax.numpy.where((I != i)&(J >= j), outer33(a[:,j,:,:],a[i,:,:,:],p), 0))%p)     
+        return a.at[:,:,:,:].set((a-jax.numpy.where((I != i)&(J >= j), outer33(a[:,j,:,:],a[i,:,:,:],p), 0))%p) 
     def eliminate(ap, j):
         a, piv = ap
+        mx = jax.numpy.count_nonzero(piv, axis = 1) # Do not eliminate if mx == r.
         aj = a[:,:,j,:,:].reshape((b,r,-1)).max(axis = 2) 
         i = jax.vmap(searchpiv)(piv).reshape((b,))  
         k = jax.vmap(searchcol)(aj,i).reshape((b,)) 
         a = jax.vmap(swaprows)(a,i,k)
-        piv = jax.vmap(updatepiv, in_axes = (0,0,None,0,0))(piv,i,j,k,aj)
-        d = jax.vmap(extractpiv, in_axes = (0,0,0,None))(piv,a,i,j).reshape((b,n,n)) 
-        a = a.at[:,i,:,:,:].set(mul53(a[:,i,:,:,:], inv(d, inverse, BLOCKSIZE),p)) # Scale row i.
-        a = jax.vmap(updateblock, in_axes = (0,0,None))(a,i,j)
+        q = jax.vmap(updatepiv, in_axes = (0,0,None,0,0))(piv,i,j,k,aj)
+        d = jax.vmap(extractpiv, in_axes = (0,0,0,None))(q,a,i,j).reshape((b,n,n)) 
+        aa = scalerow(a,i,d) # Scale row i.
+        aa = jax.vmap(updateblock, in_axes = (0,0,None))(aa,i,j)
+        a = jax.numpy.where(mx[:,None,None,None,None]*jax.numpy.ones((b,r,c,n,n), dtype = DTYPE)  == r, a,aa)
+        piv = jax.numpy.where(mx[:,None]*jax.numpy.ones((b,c), dtype = DTYPE)  == r, piv,q)
         return (a, piv), i
     def pivcol(pv):
         mx = jax.numpy.max(pv)

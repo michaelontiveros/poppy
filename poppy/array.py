@@ -117,6 +117,24 @@ class array:
     def det(self):
         return self.new(mat2vec(det(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
+    def frb(self):
+        p = self.field.p
+        c0 = p//(256*256*256)
+        p = p - c0*256*256*256
+        c1 = p//(256*256)
+        p = p - c1*256*256
+        c2 = p//256
+        c3 = p - c2*256
+        bits = jax.numpy.unpackbits(jax.numpy.array([c0,c1,c2,c3], dtype = jax.numpy.uint8))
+        i = jax.numpy.argmax(bits)
+        bits = jax.numpy.flip(bits[i:])
+        x = self
+        y = ones(self.shape,self.field)
+        for i in range(len(bits)):
+            y = x*y if bits[i] > 0 else y
+            x = x*x
+        return y
+
     def lu(self):
         return mgetrf(unblock(vec2mat(self.vec,self.field)), self.field.INV, BLOCKSIZE)
 
@@ -126,23 +144,31 @@ class array:
     def inv(self):
         return self.new(mat2vec(block(inv(unblock(vec2mat(self.vec,self.field)), self.field.INV, BLOCKSIZE),self.field)))
 
-    def rank(self):
-        @jax.jit
-        def unique_jit(a):
-            return jax.numpy.unique(a, size = self.shape[1], fill_value = -1)
-        unique = jax.vmap(unique_jit)
-        return jax.numpy.count_nonzero(unique(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
-
     def kerim(self):
         k,i,rank,prm = kerim(self.lift(),self.field)
         ker = self.new(mat2vec(k))
         im = self.new(mat2vec(i))
         return ker,im
 
+    def rank(self):
+        return kerim(self.lift(),self.field)[2].squeeze()
+
+    #def rank(self):
+    #    @jax.jit
+    #    def unique_jit(a):
+    #        return jax.numpy.unique(a, size = self.shape[1], fill_value = -1)
+    #    unique = jax.vmap(unique_jit)
+    #    return jax.numpy.count_nonzero(unique(jax.numpy.argmax(jax.numpy.sign(jax.numpy.max(block(self.lu()[1],self.#field).swapaxes(1,2)[:,:,:,0,:],axis = 3)),axis = 1))+1,axis = 1)
+
     def imprm(self):
         k,i,rank,prm = kerim(self.lift(),self.field)
         im = self.new(mat2vec(i))
         return im,prm
+
+    def imrnk(self):
+        k,i,rank,prm = kerim(self.lift(),self.field)
+        im = self.new(mat2vec(i))
+        return im,rank
 
     def ker(self):
         return self.kerim()[0]
