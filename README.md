@@ -1,9 +1,11 @@
 ## Introduction
 POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields.
 
-POPPY has a `field` class, and an `array` class. 
+POPPY has a `field` class, an `array` class, and a `theta` class. 
 
-POPPY `arrays` are `3`-dimensional; they are batches of matrices over `fields`.
+`array` is a batch of matrices over `field`.
+
+`theta` is a stabilizer state over `field`.
 
 ## Motivation
 
@@ -16,7 +18,7 @@ Computer hardware is optimized for linear operations.
 [Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs in a variety of constructible and interesting approximations. 
 The resulting programs are piecewise linear over finite fields. Lattice cryptography algorithms are simple linear arithmetic programs. 
 
-POPPY runs linear arithmetic programs faster than other libraries. 
+POPPY runs linear arithmetic programs, quickly. 
 
 ## Notation
 `q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
