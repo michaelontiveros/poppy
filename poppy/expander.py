@@ -37,7 +37,7 @@ def S(p,q): # p+1 generators for the group PSL2q if p is a quadratic residue mod
 
 def lps(p,q): # The Lubotzky-Phillips-Sarnak expander graph is a p+1-regular Cayley graph for the group PSL2q or PGL2q.
     assert (p in POLYNOMIAL) and (q in POLYNOMIAL) and (p != q) and (p > 2) and (q > 2) and (q*q > 4*p)
-    f = field(q,1)
+    f = field(q)
     l = f.leg()[p%q]
 
     @jax.jit

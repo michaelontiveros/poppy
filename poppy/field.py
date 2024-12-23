@@ -5,7 +5,7 @@ from poppy.modular import mulmod, matmulmod, negmod
 from poppy.linear import inv1, dot33
 
 class field:
-    def __init__(self, p, n, inverse = True):    
+    def __init__(self, p, n = 1, inverse = True):    
         self.p = p # Field characteristic.
         self.n = n # Field degree.
         self.q = p**n if n*jax.numpy.log2(p) < 63 else None # Field order.
@@ -23,6 +23,7 @@ class field:
             C = mul(ABC[i-2, 0], ABC[i-2, 2])
             ABC = ABC.at[i-1, 2].set(C)   
             return ABC, mul(ABC[i-1, 1], C)
+        @jax.jit
         def inv_scan():    
             A = jax.numpy.arange(1, self.p, dtype = DTYPE)
             AA = jax.numpy.concatenate([jax.numpy.ones(1, dtype = DTYPE), jax.numpy.flip(A[1:])])
