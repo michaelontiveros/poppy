@@ -1,49 +1,32 @@
 ## Introduction
 POPPY is a [JAX](https://github.com/google/jax) library for linear algebra over finite fields.
 
-POPPY has a `field` class, an `array` class, and a `theta` class. 
-
-`array` is a batch of matrices over `field`.
-
-`theta` is a stabilizer state over `field`.
-
 ## Motivation
 
-Arithmetization compiles a computation to a set of combinatorial operations on arithmetic objects (polynomial rings, finitely generated groups, ...). 
-Emerging technologies like zero knowledge proofs, error correcting codes, and derandomization, depend on arithmetization. 
+Arithmetization compiles computation to combinatorial operations on arithmetic objects like polynomial rings and finitely generated groups. 
+Error correcting codes, zero knowledge proofs, and derandomization, all depend on arithmetization. 
 
-Linearization approximates a computation with a piecewise linear circuit. It is the basis of modern AI. 
-Computer hardware is optimized for linear operations.
+Linearization compiles computation to piecewise linear circuits. Hardware is optimized for linear operations.
 
-[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs in a variety of constructible and interesting approximations. 
-The resulting programs are piecewise linear over finite fields. Lattice cryptography algorithms are simple linear arithmetic programs. 
+[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs in a variety of constructible and interesting approximations. Lattice cryptography is linear arithmetic. 
 
-POPPY runs linear arithmetic programs, quickly. 
+POPPY is designed to run linear arithmetic programs quickly. 
 
 ## Notation
-`q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
-
-`y = y_q` is the Conway polynomial. 
-
-`F = F_q` is the finite field.
-
-`M_k( F )` is the associative algebra of `k x k` matrices over `F`.
-
-`X = X_y` is an `n x n` matrix root of the polynomial `y`.
+- `q = p^n` is a prime power in the [Conway polynomials database](https://github.com/sagemath/conway-polynomials).
+- `h = h_q` is the Conway polynomial. 
+- `F = F_q` is the finite field.
+- `M_k( F )` is the associative algebra of `k x k` matrices over `F`.
+- `X = X_h` is an `n x n` matrix root of the polynomial `h`.
 
 ## Linear Representation
-POPPY represents the finite field element `f mod y` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful. 
-It extends linearly to a faithful `mod p` representation 
-of the matrix algebra `M_k( F )`. A matrix `mod p` is a `2`-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. 
-The `jax.numpy.mod()` function reduces integer arrays `mod p`.
+POPPY represents the finite field element `f mod h` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful and extends linearly to a faithful `mod p` representation of the matrix algebra `M_k( F )`. A matrix `mod p` is a two-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer arrays `mod p`.
 
 ## Performance
 
-`q = 12421^3`.
- 
-`a,b` are random `222 x 222` matrices over `F`.
-
-`c` is a random number in `F`.
+- `q = 12421^3`.
+- `a,b` are random `222 x 222` matrices over `F`.
+- `c` is a random number in `F`.
 
 | operation  | time (T4 GPU) |
 | ------------- | ------------- |
