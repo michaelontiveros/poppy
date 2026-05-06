@@ -57,11 +57,46 @@ class array:
         return self.new(b)
     def __rmul__(self, a):
         return self.__mul__(a)
-    
+
+    def __pow__(self,n):
+        n = n % (self.field.q-1)
+        assert n < 2**32
+        c0 = n//256**3
+        n = n - c0*256**3
+        c1 = n//256**2
+        n = n - c1*256**2
+        c2 = n//256
+        c3 = n - c2*256
+        bits = jax.numpy.unpackbits(jax.numpy.array([c0,c1,c2,c3], dtype = jax.numpy.uint8))
+        bits = jax.numpy.flip(bits)
+        def f_xy(x,y):
+            return x*y
+        def f_y(x,y):
+            return y
+        x = self
+        y = ones(self.shape,self.field)
+        for i in range(len(bits)):
+            y = jax.lax.cond(bits[i] > 0, f_xy, f_y, x, y)
+            x = x*x
+        return y
+
+    def __truediv__(self,b):
+        return self*b**(self.field.q-2)
+
     def __matmul__(self, a):
         def matmul(b,c):
-            return matmul34(b,vec2mat(c,self.field),self.field.p)
-        return self.new(jax.vmap(matmul)(self.vec, a.vec))
+            d = vec2mat(c,self.field)
+            return matmul34(b,d,self.field.p)
+        (ax0,ax1) = (0,0)
+        b = self.vec
+        c = a.vec
+        if len(self.vec) == 1 and len(a.vec) > 1:
+            ax0 = None
+            b = b.reshape(b.shape[1:])
+        if len(a.vec) == 1 and len(self.vec) > 1:
+            ax1 = None
+            c = c.reshape(c.shape[1:])
+        return self.new(jax.vmap(matmul, in_axes = (ax0,ax1))(b,c))
 
     def lift(self):
         return vec2mat(self.vec, self.field)
@@ -118,23 +153,8 @@ class array:
         return self.new(mat2vec(det(vec2mat(self.vec,self.field), self.field.INV, self.field.p, BLOCKSIZE)))
 
     def frb(self):
-        p = self.field.p
-        c0 = p//(256*256*256)
-        p = p - c0*256*256*256
-        c1 = p//(256*256)
-        p = p - c1*256*256
-        c2 = p//256
-        c3 = p - c2*256
-        bits = jax.numpy.unpackbits(jax.numpy.array([c0,c1,c2,c3], dtype = jax.numpy.uint8))
-        i = jax.numpy.argmax(bits)
-        bits = jax.numpy.flip(bits[i:])
-        x = self
-        y = ones(self.shape,self.field)
-        for i in range(len(bits)):
-            y = x*y if bits[i] > 0 else y
-            x = x*x
-        return y
-
+        return self**self.field.p
+   
     def lu(self):
         return mgetrf(unblock(vec2mat(self.vec,self.field)), self.field.INV, BLOCKSIZE)
 
