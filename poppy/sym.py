@@ -1,8 +1,8 @@
 import jax
 import functools
-from poppy.constant import DTYPE
 from poppy.ring import Z2, ZZ
 from poppy.array import array, zeros
+from poppy.constant import INT
 
 def factorial(n):
   return jax.numpy.arange(2,n+1).prod().item()
@@ -56,7 +56,7 @@ def symtbl(n,N): # The multiplication table of the symmetric group.
     ij = int2prm(ij,n)
     k = prm2int_jit(ij[0][ij[1]],n)
     return k
-  indices = Z2(N)
+  indices = Z2(N, INT)
   table = jax.vmap(mul)(indices).reshape((N,N))
   return table
 
@@ -142,7 +142,7 @@ def hook(dgm,ij):
 def dgm2dim(dgm): # Calculate the dimension of a representation indexed by a diagram.
   r = dgm.shape[0]
   c = dgm.shape[1]
-  ij = ZZ(r,c)
+  ij = ZZ(r,c, INT)
   N = jax.numpy.max(dgm+1)
   return factorial(N)//jax.vmap(hook, in_axes = (None,0))(dgm+1,ij).prod()
 
@@ -163,7 +163,7 @@ def prt2rng(prt,dgm): # Map a partition to the group ring of the symmetric group
   for i in range(1,len(prt)):
     p = prt[i].item()
     S = sym(p,factorial(p))
-    Z = ZZ(len(R),factorial(p))
+    Z = ZZ(len(R),factorial(p), INT)
     R = jax.vmap(concat, in_axes = (None,None,0))(R,S,Z)
   f = dgm.ravel()[jax.numpy.where(dgm.ravel() >= 0)]
   fi = prm2inv(f)
@@ -175,7 +175,7 @@ def mul1(A,B,ij): # The ijth term of the product AB in the group ring.
   return A[i][B[j]]
 
 def mul(A,B): # Symmetric roup ring multiplication.
-  ij = ZZ(len(A),len(B))
+  ij = ZZ(len(A),len(B), INT)
   return jax.vmap(mul1, in_axes = (None,None,0))(A,B,ij)
 
 def prt2dual(prt): # The dual partition.
@@ -196,7 +196,7 @@ def prt2prj(prt): # The projector.
   return g,c
 
 def symbas(n): # The transpositions.
-  ij = Z2(n)
+  ij = Z2(n, INT)
   basis = jax.numpy.zeros((n*n,n), dtype = jax.numpy.int8)
   id = jax.numpy.arange(n, dtype = jax.numpy.int8)
   for i in range(n*n):
@@ -277,7 +277,7 @@ def symreptbl(symrep,n):
   I = jax.numpy.arange(N)
   prm = int2prm(I,n)
   dim = symrep.shape[1]
-  rep = jax.numpy.zeros((N,dim,dim), dtype = DTYPE)
+  rep = jax.numpy.zeros((N,dim,dim), dtype = symrep.field.dtype)
   for i in range(N):
     trp = prm2trp(prm[i])
     indices = trp2int(trp,n)

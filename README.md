@@ -8,7 +8,7 @@ Error correcting codes, zero knowledge proofs, and derandomization, all depend o
 
 Linearization compiles computation to piecewise linear circuits. Hardware is optimized for linear operations.
 
-[Modular representation theory](https://en.wikipedia.org/wiki/Modular_representation_theory) linearizes arithmetic programs in a variety of constructible and interesting approximations. Lattice cryptography is linear arithmetic. 
+Modular representation theory linearizes arithmetic programs in a variety of constructible and interesting approximations. Lattice cryptography is linear arithmetic. 
 
 POPPY is designed to run linear arithmetic programs quickly. 
 
@@ -20,20 +20,4 @@ POPPY is designed to run linear arithmetic programs quickly.
 - `X = X_h` is an `n x n` matrix root of the polynomial `h`.
 
 ## Linear Representation
-POPPY represents the finite field element `f mod h` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful and extends linearly to a faithful `mod p` representation of the matrix algebra `M_k( F )`. A matrix `mod p` is a two-dimensional `jax.numpy.int64` array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces integer arrays `mod p`.
-
-## Performance
-
-- `q = 12421^3`.
-- `a,b` are random `222 x 222` matrices over `F`.
-- `c` is a random number in `F`.
-
-| operation  | time (T4 GPU) |
-| ------------- | ------------- |
-| `a+b`  | `200 us`  |
-| `a.trace()` | `300 us` |
-| `a*c`  | `1.4 ms`  |
-| `a@b`  | `2.8 ms`  |
-| `a.lu()`  | ` 20 ms`  |
-| `a.inv()`  | ` 40 ms`  |
-| `a.det()`  | ` 50 ms`  |
+POPPY represents the finite field element `f mod h` by the matrix `f(X) mod p`. The representation is `n` dimensional and faithful and extends linearly to a faithful `mod p` representation of the matrix algebra `M_k( F )`. A matrix `mod p` is a two-dimensional array of nonnegative integers less than `p`. The `jax.numpy.mod()` function reduces arrays `mod p`.

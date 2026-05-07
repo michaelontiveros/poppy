@@ -12,7 +12,7 @@ def entropy(x):
     return (s,y),i
   b = x.shape[0]
   f = x.field
-  z = jax.lax.scan(sum,(zeros(b,f),ones(b,f)),f.INV[1:])[0][0]
+  z = jax.lax.scan(sum,(zeros(b,f),ones(b,f)),f.inv[1:])[0][0]
   for i in range(1,x.field.n):
     z = z.frb()
   return z

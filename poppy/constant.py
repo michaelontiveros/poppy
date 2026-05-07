@@ -1,8 +1,8 @@
 import jax
 import conway_polynomials
 
-# 64 bit integer arrays encode numbers in finite fields.
-DTYPE = jax.numpy.int64
+# 32 bit integers index arrays over finite fields.
+INT = jax.numpy.int32
 # A finite field is a polynomial ring modulo an irreducible polynomial.
 POLYNOMIAL = conway_polynomials.database()
 # Linear algebra subroutines are blocked.

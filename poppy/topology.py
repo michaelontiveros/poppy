@@ -1,13 +1,13 @@
 import jax
 import functools
-from poppy.constant import DTYPE
+from poppy.constant import INT
 from poppy.array import array, zeros, ones
 
-@functools.partial(jax.jit, static_argnums = 0)
+@functools.partial(jax.jit, static_argnums = (0,1))
 def polygon(n,field): # The boundary operator of a polygon.
     V,E,F = n,n,1
-    S = array(jax.numpy.eye(V,E, k = 0, dtype = DTYPE), field)                 # Source vertices.
-    T = array(jax.numpy.eye(V,E, k = 1, dtype = DTYPE).at[-1,0].set(1), field) # Target vertices.
+    S = array(jax.numpy.eye(V,E, k = 0, dtype = field.dtype), field)                 # Source vertices.
+    T = array(jax.numpy.eye(V,E, k = 1, dtype = field.dtype).at[-1,0].set(1), field) # Target vertices.
     d0 = zeros((1,V),field)
     d1 = S-T
     d2 = ones((E,F),field)
@@ -16,11 +16,11 @@ def polygon(n,field): # The boundary operator of a polygon.
 
 @functools.partial(jax.jit, static_argnums = 0)
 def involution(n,prm): # Construct an involution from a permutation.
-    return jax.numpy.arange(n).at[prm[:n//2]].set(prm[n//2:]).at[prm[n//2:]].set(prm[:n//2])
+    return jax.numpy.arange(n, dtype = INT).at[prm[:n//2]].set(prm[n//2:]).at[prm[n//2:]].set(prm[:n//2])
 
 @functools.partial(jax.jit, static_argnums = (0,1))
 def rotation(V,D): # Rotate half-edges around vertices.
-    return jax.numpy.tile(jax.numpy.arange(1,D+1)%D,V)+jax.numpy.repeat(jax.numpy.arange(0,V*D,D),D)
+    return jax.numpy.tile(jax.numpy.arange(1,D+1, dtype = INT)%D,V)+jax.numpy.repeat(jax.numpy.arange(0,V*D,D, dtype = INT),D)
 
 @functools.partial(jax.jit, static_argnums = (0,1))
 def generator(V,D,prm): # Permute half-edges.
@@ -43,21 +43,21 @@ def unique(V,D,a):
     return jax.numpy.unique(jax.vmap(unique_jit, in_axes = (None,None,1))(V,D,a), axis = 0)
 
 def graph(degree,prm,field): # The coboundary operator of an orientable regular ribbon graph.
-    prm = jax.numpy.array(prm, dtype = DTYPE) # Half-edge identifications.
+    prm = jax.numpy.array(prm, dtype = INT) # Half-edge identifications.
     H = len(prm) # Number of half-edges.
     E = H//2     # Number of edges
     D = degree   # Vertex degree.
     V = H//D     # Number of vertices.
-    RE = jax.numpy.arange(H)             # Edge representatives.
-    RF = unique(V,D, orbit(V,D,RE,prm))  # Face representatives.
+    RE = jax.numpy.arange(H, dtype = INT) # Edge representatives.
+    RF = unique(V,D, orbit(V,D,RE,prm))   # Face representatives.
     F = len(RF)  # Number of faces.
-    RS = jax.numpy.arange(F)[:,None]     # Source face representatives.
-    RT = rotation(V,D)                   # Target face representatives.
-    BF = jax.numpy.eye(F, dtype = DTYPE)                # Face basis.
-    BS = BF[:,RE.at[RF].set(RS)]                        # Source face basis.
-    BT = BS[:,RT]                                       # Target face basis.
-    BE = jax.numpy.eye(H, dtype = DTYPE)                # Edge basis.
-    BV = jax.numpy.sum(BE[prm].reshape((H,V,D)),axis=2) # Vertex basis.
+    RS = jax.numpy.arange(F, dtype = INT)[:,None] # Source face representatives.
+    RT = rotation(V,D)                            # Target face representatives.
+    BF = jax.numpy.eye(F, dtype = field.dtype)    # Face basis.
+    BS = BF[:,RE.at[RF].set(RS)]                  # Source face basis.
+    BT = BS[:,RT]                                 # Target face basis.
+    BE = jax.numpy.eye(H, dtype = field.dtype)    # Edge basis.
+    BV = jax.numpy.sum(BE[prm].reshape((H,V,D)),axis=2).astype(field.dtype) # Vertex basis.
     L = array(BE[:,prm[:E]],field) # Left half-edges.  H E.
     R = array(BE[:,prm[E:]],field) # Right half-edges. H E.
     S = array(BS,field)            # Source faces.     F H.

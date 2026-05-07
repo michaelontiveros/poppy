@@ -1,6 +1,6 @@
 import jax
 import functools
-from poppy.constant import DTYPE
+from poppy.modular import mod
 
 # BEGIN RESHAPE
 @jax.jit
@@ -23,15 +23,15 @@ def unblock(a):
 # BEGIN LIFT/PROJECT
 @functools.partial(jax.jit, static_argnums = 1)
 def int2vec(i,f):
-    return jax.numpy.floor_divide(jax.numpy.expand_dims(i,3)*jax.numpy.ones(f.n, dtype = DTYPE).reshape((1,1,1,f.n)), jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.arange(f.n, dtype = DTYPE)).reshape((1,1,1,f.n)))%f.p
+    return mod(jax.numpy.expand_dims(i,3)*jax.numpy.ones(f.n, dtype = f.dtype).reshape((1,1,1,f.n))//(jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = f.dtype), jax.numpy.arange(f.n, dtype = f.dtype)).reshape((1,1,1,f.n))),f.p)
 
 @functools.partial(jax.jit, static_argnums = 1)
 def vec2int(v,f):
-    return jax.numpy.sum(v*jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = DTYPE), jax.numpy.arange(f.n, dtype = DTYPE)).reshape((1,1,1,f.n)), axis = -1, dtype = DTYPE)
+    return jax.numpy.sum(v*jax.numpy.power(f.p*jax.numpy.ones(f.n, dtype = f.dtype), jax.numpy.arange(f.n, dtype = f.dtype)).reshape((1,1,1,f.n)), axis = -1, dtype = f.dtype)
 
 @functools.partial(jax.jit, static_argnums = 1)
 def vec2mat(v,f):
-    return jax.numpy.tensordot(v,f.BASIS, axes = ([-1],[0]))%f.p
+    return mod(jax.numpy.tensordot(v,f.basis, axes = ([-1],[0])),f.p)
 
 @jax.jit
 def mat2vec(m):
@@ -47,5 +47,5 @@ def mat2int(m,f):
 
 @jax.jit
 def rep(v,b,p):
-    return jax.numpy.tensordot(v,b, axes = ([-1],[0]))%p
+    return mod(jax.numpy.tensordot(v,b, axes = ([-1],[0])),p)
 # END LIFT/PROJECT
