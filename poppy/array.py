@@ -1,6 +1,6 @@
 import jax
 import functools
-from poppy.constant import INT, BLOCKSIZE, SEED
+from poppy.constant import INT, BLOCKSIZE, SEED, CMAP
 from poppy.modular import mod
 from poppy.linear import mul45, matmul34, trace4, trace, det, mgetrf, getrf, inv, kerim, gje2
 from poppy.rep import int2vec, vec2int, vec2mat, mat2vec, block, unblock
@@ -122,6 +122,9 @@ class array:
     def hstack(self, a):
         return self.new(jax.numpy.concatenate([self.vec, a.vec], axis = 2))
 
+    def vstack(self, a):
+        return self.new(jax.numpy.concatenate([self.vec, a.vec], axis = 1))
+
     def stack(self, a):
         return self.new(jax.numpy.concatenate([self.vec, a.vec], axis = 0))
 
@@ -227,19 +230,30 @@ class array:
     def dirprod(self,b):
         return self.new(jax.numpy.einsum('ijkl,imnlr->ijmknr',self.vec, b.lift()).reshape((self.shape[0],self.shape[1]*b.shape[1],self.shape[2]*b.shape[2],self.field.n)))
 
-    def plot(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
+    def isotropic(self):
+        J = jay(self.shape[2],self.field)
+        return (self@J@(self.t())).vanishes()
+
+    def lagrangian(self):
+        return self.isotropic() & (self.rank() == self.shape[2]//2)
+
+    def symplectic(self):
+        J = jay(self.shape[2],self.field)
+        return (self@J@(self.t())-J).vanishes()
+
+    def plot(self, title = None, size = 10, dpi = 256, cmap = CMAP):
         title = title if title is not None else self.__repr__()
         return plot(self.vec, title = title, size = size, dpi = dpi, cmap = cmap)
 
-    def plotlift(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
+    def plotlift(self, title = None, size = 10, dpi = 256, cmap = CMAP):
         title = title if title is not None else self.__repr__()
         return plot(self.lift().swapaxes(2,3), title = title, size = size, dpi = dpi, cmap = cmap)
 
-    def plotproj(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
+    def plotproj(self, title = None, size = 10, dpi = 256, cmap = CMAP):
         title = title if title is not None else self.__repr__()
         return plot(self.proj(), title = title, size = size, dpi = dpi, cmap = cmap)
     
-    def plottrace(self, title = None, size = 10, dpi = 256, cmap = 'twilight_shifted'):
+    def plottrace(self, title = None, size = 10, dpi = 256, cmap = CMAP):
         title = title if title is not None else self.__repr__()
         return plot(trace(self.lift(),self.field.p), title = title, size = size, dpi = dpi, cmap = cmap)
 
@@ -265,6 +279,12 @@ def arange(n,field):
     return array(jax.numpy.arange(n, dtype = field.dtype).reshape((1,n,1))%field.q, field)
 def eye(shape,field):
     return array(jax.numpy.eye(shape, dtype = field.dtype), field)
+def jay(shape,field):
+    assert shape % 2 == 0
+    I = eye(shape//2,field)
+    top = (0*I).hstack(I)
+    bottom = (-I).hstack(0*I)
+    return top.vstack(bottom)
 # END NAMED ARRAYS 
 
 # BEGIN RANDOM ARRAYS

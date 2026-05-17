@@ -2,7 +2,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 from poppy.constant import INT, POLYNOMIAL, BLOCKSIZE, SEED
 from poppy.field import field
-from poppy.array import array, zeros, ones, arange, eye, random
+from poppy.array import array, zeros, ones, arange, eye, jay, random
 from poppy.theta import theta
 from poppy.modular import mod
 from poppy.linear import trace, mul53, outer33, outer44, matmul34, matmul55, mtrsm, trsm, mgetrf, getrf, gje2, inv

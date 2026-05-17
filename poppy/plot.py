@@ -1,7 +1,8 @@
 import jax
 import matplotlib.pyplot
+from poppy.constant import CMAP
 
-def plot(a, title = '', size = 4, dpi = 256, cmap = 'twilight_shifted'):
+def plot(a, title = '', size = 4, dpi = 256, cmap = CMAP):
     matplotlib.rc('figure', figsize = (size,size), dpi = dpi)
     a = a.squeeze()
     s = jax.numpy.array(a.shape)

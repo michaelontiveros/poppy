@@ -146,7 +146,7 @@ def dgm2dim(dgm): # Calculate the dimension of a representation indexed by a dia
   N = jax.numpy.max(dgm+1)
   return factorial(N)//jax.vmap(hook, in_axes = (None,0))(dgm+1,ij).prod()
 
-def prt2dim(prt): # Calculate the dimension of a representation index by a partition.
+def prt2dim(prt): # Calculate the dimension of a representation indexed by a partition.
   return dgm2dim(prt2dgm(prt))
 
 def concat(A,B,ij): # The direct sum of permutations.
